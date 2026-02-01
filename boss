@@ -1,0 +1,117 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { GridStack } from 'gridstack';
+import 'gridstack/dist/gridstack.css';
+
+/**
+ * OMEGA UI - MVP COMMAND CENTER
+ * Features: UCP Handshake, SEO Auditor, Synergetic Coupling
+ */
+
+const OMEGA_THEME = {
+    magenta: '#ea00ea',
+    charcoal: '#3c3c3c',
+    blue: '#2699fe',
+    green: '#4bce2a',
+    bg: '#1a1a1a'
+};
+
+const CommandCenterMVP = () => {
+    const [activeContext, setActiveContext] = useState('Personal'); // Synergetic State
+    const [seoScore, setSeoScore] = useState(0);
+    const [minimized, setMinimized] = useState([]);
+
+    // Initialize Gridstack with Persistence
+    useEffect(() => {
+        const grid = GridStack.init({
+            float: true,
+            column: 12,
+            cellHeight: '100px',
+            margin: 10
+        });
+
+        // Background SEO Task - Simulating continuous run
+        const auditTimer = setInterval(() => {
+            setSeoScore(prev => (prev < 98 ? prev + 1 : 98));
+        }, 3000);
+
+        return () => clearInterval(auditTimer);
+    }, []);
+
+    return (
+        <div style={{ display: 'flex', height: '100vh', background: OMEGA_THEME.bg, color: '#fff' }}>
+            
+            {/* NARROW SIDEBAR STRIP (Minimized Apps) */}
+            <nav style={{ width: '70px', background: OMEGA_THEME.charcoal, borderRight: `2px solid ${OMEGA_THEME.magenta}`, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px' }}>
+                <div style={{ color: OMEGA_THEME.magenta, fontSize: '1.5rem', marginBottom: '30px' }}>Ω</div>
+                {minimized.map(app => (
+                    <div key={app} title={app} style={{ width: '40px', height: '40px', background: OMEGA_THEME.blue, borderRadius: '8px', marginBottom: '15px', cursor: 'pointer' }} />
+                ))}
+            </nav>
+
+            <main style={{ flexGrow: 1, padding: '20px', overflowY: 'auto' }}>
+                <header style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${OMEGA_THEME.charcoal}`, paddingBottom: '10px' }}>
+                    <div>
+                        <h2 style={{ margin: 0 }}>Syncloudconnect <span style={{ color: OMEGA_THEME.magenta }}>Command</span></h2>
+                        <small>Context: <strong>{activeContext} Mode</strong></small>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ color: OMEGA_THEME.green }}>Y-LINK: VERIFIED</div>
+                        <small>ID: G-D1N75W37BQ</small>
+                    </div>
+                </header>
+
+                <div className="grid-stack" style={{ marginTop: '20px' }}>
+                    
+                    {/* APP 1: SEO AUDITOR */}
+                    <div className="grid-stack-item" gs-w="7" gs-h="4">
+                        <div className="grid-stack-item-content" style={cardStyle}>
+                            <h4 style={{ color: OMEGA_THEME.magenta }}>SEO Auditor Engine</h4>
+                            <div style={{ padding: '10px', background: '#222', borderRadius: '5px' }}>
+                                <p>Scanning: <strong>syncloudconnect.com</strong></p>
+                                <div style={{ height: '10px', width: '100%', background: '#444' }}>
+                                    <div style={{ height: '100%', width: `${seoScore}%`, background: OMEGA_THEME.green, transition: 'width 0.5s' }} />
+                                </div>
+                                <p>Synergetic Score: {seoScore}%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* APP 2: SYNERGETIC COUPLING (AI) */}
+                    <div className="grid-stack-item" gs-w="5" gs-h="4">
+                        <div className="grid-stack-item-content" style={cardStyle}>
+                            <h4 style={{ color: OMEGA_THEME.blue }}>Me-Myself-AI</h4>
+                            <div style={{ fontSize: '0.9rem', marginBottom: '10px' }}>
+                                <em>Switch Coupling:</em>
+                                <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
+                                    {['Boss', 'Family', 'Teacher', 'Worker'].map(mode => (
+                                        <button 
+                                            key={mode}
+                                            onClick={() => setActiveContext(mode)}
+                                            style={{ background: activeContext === mode ? OMEGA_THEME.magenta : '#444', border: 'none', color: '#fff', fontSize: '0.7rem', padding: '5px' }}
+                                        >
+                                            {mode}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ background: '#000', padding: '10px', height: '100px', overflowY: 'auto', borderLeft: `3px solid ${OMEGA_THEME.blue}` }}>
+                                AI: "Current {activeContext} tasks are synced. UCP handshake confirms document integrity."
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    );
+};
+
+const cardStyle = {
+    background: OMEGA_THEME.charcoal,
+    borderRadius: '10px',
+    padding: '15px',
+    border: '1px solid #444',
+    boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+};
+
+export default CommandCenterMVP;
