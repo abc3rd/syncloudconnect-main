@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLYTCH · GoHighLevel Command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--mag:#ea00ea;--sil:#c3c3c3;--bg:#0b0b10;--panel:#14141c;--line:#2a2a36;--txt:#ececf2;--dim:#9a9aa8;--ok:#4bce2a;--warn:#ffb020;--bad:#ff4d6d;--blue:#2699fe}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1000px 500px at 90% -10%,#ea00ea1f,transparent),var(--bg);color:var(--txt);font:16px/1.45 Rajdhani,system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:16px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{font:800 20px Orbitron;letter-spacing:.08em}.logo b{color:var(--mag)}
+.pill{font:12px 'Share Tech Mono';border:1px solid var(--line);border-radius:20px;padding:3px 10px;color:var(--sil)}
+.pill.ok{border-color:#4bce2a66;color:var(--ok)}.pill.bad{border-color:#ff4d6d66;color:var(--bad)}
+nav{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+nav button{background:none;border:1px solid var(--line);color:var(--sil);padding:8px 14px;border-radius:8px;font:600 15px Rajdhani;cursor:pointer;position:relative}
+nav button.on{border-color:var(--mag);color:#fff;background:#ea00ea1a}
+.badge{position:absolute;top:-7px;right:-7px;background:var(--mag);color:#fff;border-radius:10px;font:700 11px Rajdhani;padding:1px 6px}
+main{max-width:1150px;margin:0 auto;padding:22px 20px 60px}
+h2{font:600 17px Orbitron;letter-spacing:.04em;margin:0 0 4px}
+.sub{color:var(--dim);margin:0 0 14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.btn{background:var(--mag);color:#fff;border:0;padding:9px 16px;border-radius:9px;font:700 15px Rajdhani;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--sil)}
+.btn.red{background:none;border:1px solid var(--bad);color:var(--bad)}
+.btn.green{background:var(--ok);color:#06130a}
+input,select,textarea{background:#0e0e15;border:1px solid var(--line);color:var(--txt);padding:9px 10px;border-radius:8px;font:15px Rajdhani;width:100%}
+input:focus,textarea:focus{outline:none;border-color:var(--mag)}
+label{display:block;font-weight:600;color:var(--sil);font-size:13px;margin:8px 0 4px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:200px}
+.prop-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.prop-head h3{margin:0;font:700 17px Rajdhani}
+.tag{font:12px 'Share Tech Mono';border-radius:6px;padding:2px 8px;background:#ffffff0d;color:var(--sil)}
+.tag.del{background:#ff4d6d22;color:var(--bad)}.tag.stale{background:#ffb02022;color:var(--warn)}.tag.done{background:#4bce2a22;color:var(--ok)}.tag.failed{background:#ff4d6d22;color:var(--bad)}
+.reason{color:var(--sil);margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:600}
+td.old{color:#ff9fb0;text-decoration:line-through}td.new{color:#9ff59f}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+.clickable tr:hover td{background:#ffffff08;cursor:pointer}
+.hidden{display:none}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b1b26;border:1px solid var(--mag);padding:10px 18px;border-radius:10px;z-index:9}
+.mono{font-family:'Share Tech Mono',monospace;font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.empty{color:var(--dim);text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>GLYTCH</b> · GHL COMMAND</div>
+  <span class="pill" id="conn">not connected</span>
+  <nav>
+    <button data-tab="queue" class="on">Approvals <span class="badge hidden" id="qCount"></span></button>
+    <button data-tab="data">Data</button>
+    <button data-tab="tasks">Tasks</button>
+    <button data-tab="log">Log</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+</header>
+<main>
+
+<section id="tab-queue">
+  <h2>Waiting for your approval</h2>
+  <p class="sub">Nothing below has changed in GoHighLevel yet. Approve runs it; reject drops it.</p>
+  <div class="row" style="margin-bottom:12px">
+    <select id="qFilter" style="width:auto"><option value="pending">Pending</option><option value="stale">Changed since proposed</option><option value="">All</option><option value="done">Done</option><option value="rejected">Rejected</option><option value="failed">Failed</option></select>
+    <button class="btn ghost" id="qRefresh">Refresh</button>
+    <span class="grow"></span>
+    <button class="btn green" id="qBulk" disabled>Approve selected (<span id="qSel">0</span>)</button>
+  </div>
+  <div id="queue"></div>
+</section>
+
+<section id="tab-data" class="hidden">
+  <h2>Your GoHighLevel data</h2>
+  <p class="sub">Reads are instant. Any change you make here becomes a proposal for the approval queue.</p>
+  <div class="row" style="margin-bottom:12px">
+    <select id="dKind" style="width:auto"><option value="contacts">Contacts</option><option value="opps">Opportunities</option><option value="tags">Tags</option><option value="pipelines">Pipelines</option></select>
+    <input id="dQuery" class="grow" placeholder="Search name, email, phone…">
+    <button class="btn" id="dGo">Search</button>
+  </div>
+  <div id="dataOut"></div>
+  <div id="editor" class="card hidden" style="margin-top:14px"></div>
+</section>
+
+<section id="tab-tasks" class="hidden">
+  <h2>Tedious work, done for you</h2>
+  <p class="sub">Each task scans GoHighLevel and proposes fixes. It never edits anything; you approve in the queue. All tasks also run daily on their own.</p>
+  <div class="grid2" id="taskCards"></div>
+  <div class="card"><label>Pages to scan (100 contacts each)</label><input id="tPages" type="number" value="10" min="1" max="50" style="width:120px">
+  <label>"Stale" means no movement for (days)</label><input id="tDays" type="number" value="14" min="1" style="width:120px"></div>
+  <pre id="taskOut" class="card mono hidden" style="white-space:pre-wrap"></pre>
+</section>
+
+<section id="tab-log" class="hidden">
+  <h2>Audit log</h2>
+  <p class="sub">Every proposal, approval, rejection and run, newest first.</p>
+  <div id="logOut"></div>
+</section>
+
+<section id="tab-settings" class="hidden">
+  <div class="card">
+    <h2>Connect</h2>
+    <p class="sub">Your GoHighLevel token never comes to this page. It lives on the bridge server. This page only needs your GLYTCH admin key, kept for this browser tab only.</p>
+    <label>Bridge address (leave blank if this page is served by the bridge)</label>
+    <input id="sUrl" placeholder="https://your-bridge.vercel.app">
+    <label>GLYTCH admin key</label>
+    <input id="sKey" type="password" placeholder="GLYTCH_ADMIN_KEY">
+    <div class="row" style="margin-top:12px"><button class="btn" id="sSave">Connect</button><span id="sMsg" class="mono"></span></div>
+  </div>
+  <div class="card"><h2>Bridge status</h2><pre id="sStatus" class="mono" style="white-space:pre-wrap;margin:0"></pre></div>
+</section>
+</main>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cfg={ get url(){ try{return sessionStorage.getItem("glytch_url")||"";}catch{return ""} }, get key(){ try{return sessionStorage.getItem("glytch_key")||"";}catch{return ""} } };
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.remove("hidden"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add("hidden"),3500); }
+async function api(path,{method="GET",body}={}){
+  const r=await fetch((cfg.url||"")+"/api/"+path,{method,headers:{"x-glytch-key":cfg.key,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({error:"Bad response"}));
+  if(!r.ok) throw Object.assign(new Error(j.error||("HTTP "+r.status)),{status:r.status,data:j});
+  return j;
+}
+const fmtTime=s=>s?new Date(s).toLocaleString():"";
+const name=c=>c?([c.firstName,c.lastName].filter(Boolean).join(" ")||c.contactName||c.name||c.email||c.phone||c.id):"";
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{ document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  ["queue","data","tasks","log","settings"].forEach(t=>$("#tab-"+t).classList.toggle("hidden",t!==b.dataset.tab));
+  if(b.dataset.tab==="queue") loadQueue(); if(b.dataset.tab==="log") loadLog(); });
+
+/* ---------- connection ---------- */
+async function checkStatus(){
+  try{ const s=await api("status"); $("#sStatus").textContent=JSON.stringify(s,null,2);
+    const c=$("#conn");
+    if(s.ghl?.ok){ c.textContent="● "+s.ghl.location; c.className="pill ok"; }
+    else if(s.role){ c.textContent="GoHighLevel: "+(s.ghl?.error||"check setup"); c.className="pill bad"; }
+    else { c.textContent="key needed"; c.className="pill bad"; }
+    return s;
+  }catch(e){ $("#conn").textContent="bridge unreachable"; $("#conn").className="pill bad"; $("#sStatus").textContent=e.message; }
+}
+$("#sSave").onclick=async()=>{ try{ sessionStorage.setItem("glytch_url",$("#sUrl").value.trim().replace(/\/$/,"")); sessionStorage.setItem("glytch_key",$("#sKey").value.trim()); }catch{}
+  const s=await checkStatus(); $("#sMsg").textContent = s?.role==="admin" ? "Connected as admin." : s?.role ? "That's the agent key: it can't approve. Use the admin key here." : "Key not accepted.";
+  if(s?.role) loadQueue(); };
+
+/* ---------- approval queue ---------- */
+let queue=[], selected=new Set();
+function diffRows(p){
+  if(p.op==="contact.update"||p.op==="opportunity.update"){
+    return Object.entries(p.payload).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="old">${esc(JSON.stringify(p.before?.[k]??""))}</td><td class="new">${esc(JSON.stringify(v))}</td></tr>`).join("");
+  }
+  if(p.op==="contact.addTags") return `<tr><td>tags</td><td>${esc((p.before?.tags||[]).join(", "))}</td><td class="new">+ ${esc(p.payload.tags.join(", "))}</td></tr>`;
+  if(p.op==="contact.removeTags") return `<tr><td>tags</td><td>${esc((p.before?.tags||[]).join(", "))}</td><td class="old">− ${esc(p.payload.tags.join(", "))}</td></tr>`;
+  if(p.op==="contact.addNote") return `<tr><td>note</td><td></td><td class="new">${esc(p.payload.body)}</td></tr>`;
+  if(p.op==="contact.create") return Object.entries(p.payload).map(([k,v])=>`<tr><td>${esc(k)}</td><td></td><td class="new">${esc(JSON.stringify(v))}</td></tr>`).join("");
+  if(p.op==="contact.delete") return `<tr><td colspan="3" style="color:var(--bad)">Deletes ${esc(name(p.before))} (${esc(p.before?.email||p.before?.phone||p.targetId)}) permanently.</td></tr>`;
+  return `<tr><td colspan="3" class="mono">${esc(JSON.stringify(p.payload))}</td></tr>`;
+}
+async function loadQueue(){
+  if(!cfg.key) { $("#queue").innerHTML=`<div class="empty">Add your admin key in Settings to connect.</div>`; return; }
+  try{
+    const st=$("#qFilter").value; const j=await api("proposals"+(st?"?status="+st:""));
+    queue=j.proposals; selected.clear(); updateBulk();
+    const pend=(await api("proposals?status=pending")).proposals.length+(await api("proposals?status=stale")).proposals.length;
+    $("#qCount").textContent=pend; $("#qCount").classList.toggle("hidden",!pend);
+    $("#queue").innerHTML = queue.length ? queue.map(p=>{
+      const open=p.status==="pending"||p.status==="stale";
+      return `<div class="card" data-id="${p.id}">
+      <div class="prop-head">${open&&!p.destructive?`<input type="checkbox" class="sel" style="width:auto">`:""}
+        <h3>${esc(p.label)}: ${esc(name(p.before)||p.targetId||"new contact")}</h3>
+        <span class="tag">${esc(p.source)}</span>
+        ${p.destructive?`<span class="tag del">deletes data</span>`:""}
+        ${p.status==="stale"?`<span class="tag stale">changed in GoHighLevel since proposed. Review the current values</span>`:""}
+        ${!open?`<span class="tag ${p.status}">${p.status}</span>`:""}
+        <span class="grow"></span><span class="mono" style="color:var(--dim)">${fmtTime(p.createdAt)}</span></div>
+      ${p.reason?`<div class="reason">${esc(p.reason)}</div>`:""}
+      <div class="tablewrap"><table><thead><tr><th>Field</th><th>Now</th><th>After</th></tr></thead><tbody>${diffRows(p)}</tbody></table></div>
+      ${open?`<div class="row" style="margin-top:10px">${p.destructive?`<input class="confirm" placeholder='Type DELETE to allow' style="width:200px">`:""}
+        <button class="btn green act" data-d="approve">Approve</button><button class="btn red act" data-d="reject">Reject</button></div>`:""}
+      ${p.status==="failed"?`<div class="reason" style="color:var(--bad)">${esc(typeof p.result==="string"?p.result:JSON.stringify(p.result))}</div>`:""}
+    </div>`;}).join("") : `<div class="empty">Nothing here. Run a task or propose a change from the Data tab.</div>`;
+    document.querySelectorAll("#queue .act").forEach(b=>b.onclick=()=>decideOne(b.closest("[data-id]").dataset.id,b.dataset.d,b.closest("[data-id]").querySelector(".confirm")?.value||""));
+    document.querySelectorAll("#queue .sel").forEach(c=>c.onchange=()=>{ const id=c.closest("[data-id]").dataset.id; c.checked?selected.add(id):selected.delete(id); updateBulk(); });
+  }catch(e){ $("#queue").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+function updateBulk(){ $("#qSel").textContent=selected.size; $("#qBulk").disabled=!selected.size; }
+async function decideOne(id,decision,confirmText){
+  try{ const r=await api("decide",{method:"POST",body:{id,decision,confirmText}});
+    const s=r.proposal.status; toast(s==="done"?"Done. Changed in GoHighLevel.":s==="stale"?"That record changed since. Check the new values and approve again.":s==="rejected"?"Rejected. Nothing changed.":"Failed: "+(r.proposal.result||"")); loadQueue();
+  }catch(e){ toast(e.status===428?"This deletes a contact. Type DELETE in the box, then approve.":e.message); }
+}
+$("#qBulk").onclick=async()=>{ if(!confirm(`Approve ${selected.size} change(s) in GoHighLevel?`)) return;
+  try{ const r=await api("decide",{method:"POST",body:{ids:[...selected],decision:"approve"}}); const done=r.results.filter(x=>x.status==="done").length;
+    toast(`${done} done, ${r.results.length-done} need a look`); loadQueue(); }catch(e){ toast(e.message); } };
+$("#qFilter").onchange=loadQueue; $("#qRefresh").onclick=loadQueue;
+
+/* ---------- data ---------- */
+let rows=[];
+$("#dGo").onclick=async()=>{
+  const kind=$("#dKind").value, q=$("#dQuery").value.trim(); $("#editor").classList.add("hidden");
+  try{
+    if(kind==="contacts"){ const j=await api("read?op=contacts.search&limit=100&query="+encodeURIComponent(q)); rows=j.contacts||[];
+      $("#dataOut").innerHTML = rows.length?`<div class="tablewrap"><table class="clickable"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Tags</th></tr></thead><tbody>${rows.map((c,i)=>`<tr data-i="${i}"><td>${esc(name(c))}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${esc((c.tags||[]).join(", "))}</td></tr>`).join("")}</tbody></table></div><p class="sub">Click a contact to propose changes. ${j.total!=null?esc(j.total)+" total.":""}</p>`:`<div class="empty">No contacts found.</div>`;
+      document.querySelectorAll("#dataOut tr[data-i]").forEach(tr=>tr.onclick=()=>openEditor(rows[tr.dataset.i]));
+    } else if(kind==="opps"){ const j=await api("read?op=opportunities.search&limit=100&q="+encodeURIComponent(q)); const o=j.opportunities||[];
+      $("#dataOut").innerHTML = o.length?`<div class="tablewrap"><table><thead><tr><th>Opportunity</th><th>Status</th><th>Value</th><th>Last moved</th></tr></thead><tbody>${o.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.status)}</td><td>${esc(x.monetaryValue??"")}</td><td>${fmtTime(x.lastStatusChangeAt||x.updatedAt)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No opportunities found.</div>`;
+    } else { const j=await api("read?op="+(kind==="tags"?"tags":"pipelines")); $("#dataOut").innerHTML=`<pre class="card mono" style="white-space:pre-wrap">${esc(JSON.stringify(j,null,2))}</pre>`; }
+  }catch(e){ $("#dataOut").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+};
+$("#dQuery").onkeydown=e=>{ if(e.key==="Enter") $("#dGo").click(); };
+function openEditor(c){
+  const f=["firstName","lastName","email","phone","companyName"];
+  const ed=$("#editor"); ed.classList.remove("hidden");
+  ed.innerHTML=`<h2>${esc(name(c))}</h2><p class="sub mono">${esc(c.id)}</p>
+  <div class="grid2">${f.map(k=>`<div><label>${k}</label><input data-k="${k}" value="${esc(c[k]||"")}"></div>`).join("")}</div>
+  <label>Add tags (comma-separated)</label><input id="eTags" placeholder="vip, follow-up">
+  <label>Add note</label><textarea id="eNote" rows="2"></textarea>
+  <label>Why (shows in the queue)</label><input id="eWhy" placeholder="e.g. fixed from customer's email">
+  <div class="row" style="margin-top:12px"><button class="btn" id="eProp">Propose changes</button><button class="btn red" id="eDel">Propose delete</button></div>`;
+  $("#eProp").onclick=async()=>{
+    const items=[], reason=$("#eWhy").value.trim()||"Edited in GLYTCH";
+    const payload={}; ed.querySelectorAll("[data-k]").forEach(i=>{ const k=i.dataset.k, v=i.value.trim(); if(v!==(c[k]||"")) payload[k]=v; });
+    if(Object.keys(payload).length) items.push({op:"contact.update",targetId:c.id,payload,reason});
+    const tags=$("#eTags").value.split(",").map(t=>t.trim()).filter(Boolean); if(tags.length) items.push({op:"contact.addTags",targetId:c.id,payload:{tags},reason});
+    const note=$("#eNote").value.trim(); if(note) items.push({op:"contact.addNote",targetId:c.id,payload:{body:note},reason});
+    if(!items.length) return toast("Nothing changed.");
+    try{ const r=await api("proposals",{method:"POST",body:{items}}); toast(`${r.created} change(s) sent to the approval queue.`); loadQueue(); }catch(e){ toast(e.message); }
+  };
+  $("#eDel").onclick=async()=>{ try{ await api("proposals",{method:"POST",body:{op:"contact.delete",targetId:c.id,reason:$("#eWhy").value.trim()||"Delete requested in GLYTCH"}}); toast("Delete proposed. It needs DELETE typed to approve."); loadQueue(); }catch(e){ toast(e.message); } };
+}
+
+/* ---------- tasks ---------- */
+const TASKS=[
+  ["format","Fix formatting","Phones to +1 format, email typos (gmial.com, .con), ALL CAPS names."],
+  ["duplicates","Find duplicates","Contacts sharing an email or phone get a glytch-duplicate tag so you can merge them."],
+  ["stale-opps","Stale deals","Open opportunities that haven't moved get a glytch-follow-up tag to trigger your workflow."],
+  ["tag-hygiene","Tag cleanup report","Lists near-duplicate tags (Lead vs lead). Report only."],
+  ["all","Run everything","All of the above in one pass."]];
+$("#taskCards").innerHTML=TASKS.map(([id,t,d])=>`<div class="card"><h2 style="font-size:15px">${t}</h2><p class="sub">${d}</p><button class="btn ${id==="all"?"":"ghost"}" data-job="${id}">Run</button></div>`).join("");
+document.querySelectorAll("[data-job]").forEach(b=>b.onclick=async()=>{
+  b.disabled=true; b.textContent="Running…"; const out=$("#taskOut"); out.classList.remove("hidden"); out.textContent="Scanning GoHighLevel…";
+  try{ const r=await api("jobs",{method:"POST",body:{job:b.dataset.job,maxPages:$("#tPages").value,staleDays:$("#tDays").value}});
+    out.textContent=Object.entries(r.summary).map(([k,v])=>v.report?`${k}:\n  `+(v.report.length?v.report.join("\n  "):"all clean"):`${k}: found ${v.found}, proposed ${v.proposed}${v.alreadyPending?`, ${v.alreadyPending} already waiting`:""}`).join("\n")+"\n\n"+r.note;
+    loadQueue();
+  }catch(e){ out.textContent=e.message; } finally{ b.disabled=false; b.textContent="Run"; } });
+
+/* ---------- log ---------- */
+async function loadLog(){
+  try{ const j=await api("log"); $("#logOut").innerHTML=j.log.length?`<div class="tablewrap"><table><thead><tr><th>When</th><th>Event</th><th>Details</th></tr></thead><tbody>${j.log.map(e=>`<tr><td class="mono">${fmtTime(e.at)}</td><td>${esc(e.event)}</td><td class="mono">${esc([e.op,e.targetId,e.source||e.by||e.decidedBy,e.reason||e.error||(e.summary?JSON.stringify(e.summary):"")].filter(Boolean).join(" · "))}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No activity yet.</div>`;
+  }catch(e){ $("#logOut").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+
+/* ---------- start ---------- */
+try{ $("#sUrl").value=cfg.url; }catch{}
+checkStatus().then(s=>{ if(s?.role) loadQueue(); else { document.querySelector('nav [data-tab="settings"]').click(); } });
+</script>
+</body>
+</html>
