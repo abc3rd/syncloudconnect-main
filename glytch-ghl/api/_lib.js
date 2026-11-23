@@ -11,6 +11,8 @@
 //   5. Everything is written to an audit log.
 
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 export const GHL_BASE = process.env.GHL_BASE_URL || "https://services.leadconnectorhq.com";
 export const GHL_VERSION = process.env.GHL_API_VERSION || "2021-07-28";
@@ -64,7 +66,7 @@ export function configStatus() {
     locationId: !!LOCATION_ID(),
     adminKey: !!process.env.GLYTCH_ADMIN_KEY,
     agentKey: !!process.env.GLYTCH_AGENT_KEY,
-    storage: process.env.UPSTASH_REDIS_REST_URL ? "upstash" : "memory (not saved between runs: add Upstash)",
+    storage: process.env.UPSTASH_REDIS_REST_URL ? "upstash" : process.env.GLYTCH_DATA_DIR ? "disk (" + process.env.GLYTCH_DATA_DIR + ")" : "memory (not saved between runs)",
     cron: !!process.env.CRON_SECRET,
   };
 }
@@ -193,13 +195,30 @@ async function redis(cmd) {
 const useRedis = () => !!process.env.UPSTASH_REDIS_REST_URL;
 const P = "glytch:proposals", L = "glytch:log";
 
+// File storage for always-on hosts (Railway volume): set GLYTCH_DATA_DIR=/data
+const dataDir = () => process.env.GLYTCH_DATA_DIR || "";
+let fileLoaded = false;
+function fileLoad() {
+  if (fileLoaded || !dataDir()) return;
+  fileLoaded = true;
+  try { const j = JSON.parse(fs.readFileSync(path.join(dataDir(), "glytch-store.json"), "utf8")); mem.hash = j.hash || {}; mem.list = j.list || []; } catch {}
+}
+function fileSave() {
+  if (!dataDir()) return;
+  fs.mkdirSync(dataDir(), { recursive: true });
+  const f = path.join(dataDir(), "glytch-store.json");
+  fs.writeFileSync(f + ".tmp", JSON.stringify({ hash: mem.hash, list: mem.list }));
+  fs.renameSync(f + ".tmp", f);
+}
+
 export const store = {
   async put(p) {
     if (useRedis()) await redis(["HSET", P, p.id, JSON.stringify(p)]);
-    else mem.hash[p.id] = JSON.stringify(p);
+    else { fileLoad(); mem.hash[p.id] = JSON.stringify(p); fileSave(); }
     return p;
   },
   async get(id) {
+    if (!useRedis()) fileLoad();
     const v = useRedis() ? await redis(["HGET", P, id]) : mem.hash[id];
     return v ? JSON.parse(v) : null;
   },
@@ -210,14 +229,16 @@ export const store = {
       for (let i = 1; i < flat.length; i += 2) out.push(JSON.parse(flat[i]));
       return out;
     }
+    fileLoad();
     return Object.values(mem.hash).map(v => JSON.parse(v));
   },
   async log(entry) {
     const e = JSON.stringify({ at: new Date().toISOString(), ...entry });
     if (useRedis()) { await redis(["LPUSH", L, e]); await redis(["LTRIM", L, "0", "999"]); }
-    else { mem.list.unshift(e); mem.list.length = Math.min(mem.list.length, 1000); }
+    else { fileLoad(); mem.list.unshift(e); mem.list.length = Math.min(mem.list.length, 1000); fileSave(); }
   },
   async logs(n = 200) {
+    if (!useRedis()) fileLoad();
     const arr = useRedis() ? (await redis(["LRANGE", L, "0", String(n - 1)])) || [] : mem.list.slice(0, n);
     return arr.map(x => JSON.parse(x));
   },

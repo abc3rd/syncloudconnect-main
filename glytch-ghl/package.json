@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "GLYTCH ⇄ GoHighLevel bridge: reads run, edits wait for approval. Omega UI, LLC / SynCloud Connect.",
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node test/run.mjs" }
+  "description": "GLYTCH \u21c4 GoHighLevel bridge: reads run, edits wait for approval. Omega UI, LLC / SynCloud Connect.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/run.mjs"
+  }
 }
