@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLYTCH Portal · SynCloud Connect</title>
+<link rel="stylesheet" href="/assets/gridstack.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--mag:#ea00ea;--sil:#c3c3c3;--bg:#0b0b10;--panel:#14141c;--line:#2a2a36;--txt:#ececf2;--dim:#9a9aa8;--ok:#4bce2a;--warn:#ffb020;--bad:#ff4d6d}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1100px 520px at 85% -10%,#ea00ea1c,transparent),var(--bg);color:var(--txt);font:15px/1.45 Rajdhani,system-ui,sans-serif;min-height:100vh}
+.hidden{display:none!important}
+header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{font:800 19px Orbitron;letter-spacing:.08em}.logo b{color:var(--mag)}
+.pill{font:12px 'Share Tech Mono';border:1px solid var(--line);border-radius:20px;padding:3px 10px;color:var(--sil)}
+.pill.ok{border-color:#4bce2a66;color:var(--ok)}.pill.bad{border-color:#ff4d6d66;color:var(--bad)}
+.spacer{flex:1}
+button,.btn{background:var(--mag);color:#fff;border:0;padding:8px 14px;border-radius:9px;font:700 14px Rajdhani;cursor:pointer;text-decoration:none;display:inline-block}
+button:disabled{opacity:.4;cursor:not-allowed}
+.ghost{background:none;border:1px solid var(--line);color:var(--sil)}
+.green{background:var(--ok);color:#06130a}.red{background:none;border:1px solid var(--bad);color:var(--bad)}
+.small{padding:5px 10px;font-size:13px}
+input,select{background:#0e0e15;border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:8px;font:15px Rajdhani;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--mag)}
+label{display:block;font-weight:600;color:var(--sil);font-size:13px;margin:10px 0 4px}
+.center{min-height:80vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.authcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;width:100%;max-width:380px}
+.authcard h1{font:800 22px Orbitron;margin:0 0 4px}.authcard h1 b{color:var(--mag)}
+.sub{color:var(--dim);margin:0 0 12px}
+.err{color:var(--bad);min-height:20px;margin-top:8px;font-weight:600}
+main{padding:14px 16px 40px}
+.toolbar{display:flex;gap:8px;align-items:center;margin:0 6px 10px;flex-wrap:wrap}
+.grid-stack{min-height:300px}
+.grid-stack-item-content{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden!important}
+.editing .grid-stack-item-content{border-style:dashed;border-color:var(--mag);cursor:move}
+.wh{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.wh h3{margin:0;font:600 14px Orbitron;letter-spacing:.04em}
+.wb{padding:12px 14px;overflow:auto;flex:1}
+.stat{display:flex;gap:10px;flex-wrap:wrap}
+.stat div{flex:1;min-width:110px;background:#0e0e15;border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.stat b{font:800 21px Orbitron;display:block;line-height:1.2}.stat span{color:var(--dim);font-size:12px}
+.prop{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.prop .t{font-weight:700}.prop .r{color:var(--sil);font-size:13px;margin:4px 0}
+.chg{font:12px 'Share Tech Mono';color:var(--dim)}.chg .n{color:#9ff59f}.chg .o{color:#ff9fb0;text-decoration:line-through}
+.tag{font:11px 'Share Tech Mono';border-radius:6px;padding:1px 7px;background:#ffffff0d;color:var(--sil);margin-left:4px}
+.tag.del{background:#ff4d6d22;color:var(--bad)}.tag.stale{background:#ffb02022;color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--dim);font-weight:600}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.empty{color:var(--dim);text-align:center;padding:16px}
+.mono{font-family:'Share Tech Mono',monospace;font-size:12px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1b1b26;border:1px solid var(--mag);padding:10px 18px;border-radius:10px;z-index:99;max-width:90vw}
+@media(max-width:760px){.stat{gap:6px}.stat div{min-width:0;padding:6px}.stat b{font-size:16px}.stat span{font-size:10px;line-height:1.1;display:block}}
+.secret{font:14px 'Share Tech Mono';background:#0e0e15;border:1px dashed var(--mag);padding:6px 10px;border-radius:8px;user-select:all}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="vLogin" class="center hidden">
+  <form class="authcard" id="loginForm">
+    <h1><b>GLYTCH</b> PORTAL</h1>
+    <p class="sub">SynCloud Connect · Omega UI, LLC</p>
+    <label for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="username" required>
+    <label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password" required>
+    <button style="width:100%;margin-top:16px" type="submit">Log in</button>
+    <div class="err" id="lErr"></div>
+  </form>
+</div>
+
+<!-- ============ SET PASSWORD ============ -->
+<div id="vPass" class="center hidden">
+  <form class="authcard" id="passForm">
+    <h1>Set your password</h1>
+    <p class="sub">You're using a temporary password. Choose your own to continue.</p>
+    <label for="pCur">Current (temporary) password</label><input id="pCur" type="password" autocomplete="current-password" required>
+    <label for="pNew">New password (10+ characters)</label><input id="pNew" type="password" autocomplete="new-password" minlength="10" required>
+    <button style="width:100%;margin-top:16px" type="submit">Save and continue</button>
+    <div class="err" id="pErr"></div>
+  </form>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div id="vApp" class="hidden">
+<header>
+  <div class="logo"><b>GLYTCH</b> PORTAL</div>
+  <span class="pill" id="conn">connecting…</span>
+  <select id="locSel" class="hidden" style="width:auto;padding:5px 8px" title="Sub-account"></select>
+  <span class="spacer"></span>
+  <span class="mono" id="who"></span>
+  <button class="ghost small" id="btnPw">Change password</button>
+  <button class="ghost small" id="btnOut">Log out</button>
+</header>
+<main>
+  <div class="toolbar">
+    <button class="ghost small" id="btnEdit">Arrange dashboard</button>
+    <button class="ghost small hidden" id="btnReset">Reset layout</button>
+    <span class="mono" id="editHint"></span>
+  </div>
+  <div class="grid-stack" id="grid">
+
+    <div class="grid-stack-item" gs-id="status" gs-x="0" gs-y="0" gs-w="12" gs-h="2" gs-min-h="2"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Status</h3><span class="spacer"></span><button class="ghost small" data-refresh="status">Refresh</button></div>
+      <div class="wb" style="padding:8px 14px"><div class="stat" id="wStatus"></div></div></div></div>
+
+    <div class="grid-stack-item" gs-id="approvals" gs-x="0" gs-y="2" gs-w="7" gs-h="6" gs-min-w="4" gs-min-h="3"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Approvals</h3><span class="spacer"></span><button class="ghost small" data-refresh="approvals">Refresh</button></div>
+      <div class="wb" id="wApprovals"></div></div></div>
+
+    <div class="grid-stack-item" gs-id="tasks" gs-x="7" gs-y="2" gs-w="5" gs-h="3" gs-min-w="3" gs-min-h="2" data-role="staff"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Tasks</h3></div>
+      <div class="wb"><p class="sub">Each scan proposes fixes for approval. Nothing changes until approved.</p>
+        <div class="row">
+          <button class="small" data-job="format">Fix formatting</button><button class="small" data-job="duplicates">Find duplicates</button>
+          <button class="small" data-job="stale-opps">Stale deals</button><button class="small ghost" data-job="tag-hygiene">Tag report</button>
+        </div><pre class="mono" id="wTasks" style="white-space:pre-wrap;margin:10px 0 0"></pre></div></div></div>
+
+    <div class="grid-stack-item" gs-id="kit" gs-x="7" gs-y="5" gs-w="5" gs-h="3" gs-min-w="3" gs-min-h="2"><div class="grid-stack-item-content">
+      <div class="wh"><h3>GHL Data Prep Kit</h3></div>
+      <div class="wb"><p class="sub">Clean, de-duplicate, tag and split contact lists for import. Runs in your browser; files never leave your computer.</p>
+        <div class="row"><a class="btn small" href="/kit/app.html" target="_blank" rel="noopener">Open the kit</a><a class="btn ghost small" href="/kit/" target="_blank" rel="noopener">Sales page</a></div></div></div></div>
+
+    <div class="grid-stack-item" gs-id="contacts" gs-x="0" gs-y="8" gs-w="7" gs-h="5" gs-min-w="4" gs-min-h="3"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Contacts</h3></div>
+      <div class="wb"><div class="row" style="margin-bottom:8px"><input id="cQ" placeholder="Search name, email, phone…" style="flex:1"><button class="small" id="cGo">Search</button></div><div id="wContacts"></div></div></div></div>
+
+    <div class="grid-stack-item" gs-id="activity" gs-x="7" gs-y="8" gs-w="5" gs-h="5" gs-min-w="3" gs-min-h="3" data-role="admin"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Activity</h3><span class="spacer"></span><button class="ghost small" data-refresh="activity">Refresh</button></div>
+      <div class="wb" id="wActivity"></div></div></div>
+
+    <div class="grid-stack-item" gs-id="team" gs-x="0" gs-y="13" gs-w="12" gs-h="4" gs-min-w="5" gs-min-h="3" data-role="admin"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Team access</h3></div>
+      <div class="wb"><div id="wTeam"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="tEmail" type="email" placeholder="email" style="flex:2;min-width:180px"><input id="tName" placeholder="name" style="flex:1;min-width:120px">
+          <select id="tRole" style="width:auto"><option value="viewer">Viewer: sees data</option><option value="staff">Staff: proposes changes, runs scans</option><option value="admin">Admin: approves changes</option></select>
+          <button class="small" id="tAdd">Add person</button>
+        </div><div id="tOut" style="margin-top:8px"></div></div></div></div>
+  </div>
+</main>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="/assets/gridstack-all.js"></script>
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const RANK={viewer:1,staff:2,admin:3,owner:4}; let me=null, grid=null, loc="";
+try{ loc=sessionStorage.getItem("glytch_loc")||""; }catch{}
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.remove("hidden"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add("hidden"),3800); }
+async function api(path,{method="GET",body}={}){
+  const r=await fetch("/portal-api/"+path,{method,headers:{"content-type":"application/json","x-portal":"1",...(loc?{"x-glytch-location":loc}:{})},body:body?JSON.stringify(body):undefined,credentials:"same-origin"});
+  const j=await r.json().catch(()=>({error:"Bad response"}));
+  if(r.status===401&&path!=="login"){ show("login"); throw new Error("Please log in."); }
+  if(r.status===428){ show("pass"); throw new Error(j.error); }
+  if(!r.ok) throw Object.assign(new Error(j.error||("HTTP "+r.status)),{status:r.status});
+  return j;
+}
+const B=p=>api("bridge/"+p);
+const can=r=>me&&RANK[me.role]>=RANK[r];
+const nm=c=>c?([c.firstName,c.lastName].filter(Boolean).join(" ")||c.contactName||c.name||c.email||c.phone||c.id):"";
+const when=s=>s?new Date(s).toLocaleString():"";
+function show(v){ ["login","pass","app"].forEach(x=>$("#v"+x[0].toUpperCase()+x.slice(1)).classList.toggle("hidden",x!==v)); }
+
+/* ---------- auth ---------- */
+$("#loginForm").onsubmit=async e=>{ e.preventDefault(); $("#lErr").textContent="";
+  try{ const r=await api("login",{method:"POST",body:{email:$("#lEmail").value,password:$("#lPass").value}}); me=r.user; me.mustChange?show("pass"):start(); }
+  catch(err){ $("#lErr").textContent=err.message; } };
+$("#passForm").onsubmit=async e=>{ e.preventDefault(); $("#pErr").textContent="";
+  try{ const r=await api("password",{method:"POST",body:{current:$("#pCur").value,next:$("#pNew").value}}); me=r.user; toast("Password saved."); start(); }
+  catch(err){ $("#pErr").textContent=err.message; } };
+$("#btnOut").onclick=async()=>{ await api("logout",{method:"POST"}).catch(()=>{}); location.reload(); };
+$("#btnPw").onclick=()=>show("pass");
+
+/* ---------- dashboard ---------- */
+const DEFAULT_LAYOUT=[...document.querySelectorAll(".grid-stack-item")].map(el=>({id:el.getAttribute("gs-id"),x:+el.getAttribute("gs-x"),y:+el.getAttribute("gs-y"),w:+el.getAttribute("gs-w"),h:+el.getAttribute("gs-h")}));
+async function start(){
+  show("app"); $("#who").textContent=`${me.email} · ${me.role}`;
+  document.querySelectorAll("[data-role]").forEach(el=>{ if(!can(el.dataset.role)) el.remove(); });
+  if(!grid){
+    try{ const {layout}=await api("layout"); if(layout) layout.forEach(w=>{ const el=document.querySelector(`.grid-stack-item[gs-id="${w.id}"]`); if(el) ["x","y","w","h"].forEach(k=>el.setAttribute("gs-"+k,w[k])); }); }catch{}
+    grid=GridStack.init({column:12,cellHeight:70,margin:8,float:false,staticGrid:true,columnOpts:{breakpoints:[{w:760,c:1}]}},"#grid");
+  }
+  refreshAll();
+}
+let editing=false;
+$("#btnEdit").onclick=async()=>{
+  editing=!editing; grid.setStatic(!editing); document.body.classList.toggle("editing",editing);
+  $("#btnEdit").textContent=editing?"Save layout":"Arrange dashboard"; $("#btnReset").classList.toggle("hidden",!editing);
+  $("#editHint").textContent=editing?"Drag tiles to move them; drag a corner to resize.":"";
+  if(!editing){ const layout=grid.save(false).map(n=>({id:n.id,x:n.x,y:n.y,w:n.w,h:n.h})); try{ await api("layout",{method:"PUT",body:{layout}}); toast("Layout saved."); }catch(e){ toast(e.message); } }
+};
+$("#btnReset").onclick=async()=>{ await api("layout",{method:"DELETE"}).catch(()=>{}); grid.batchUpdate(); DEFAULT_LAYOUT.forEach(w=>{ const el=document.querySelector(`.grid-stack-item[gs-id="${w.id}"]`); if(el) grid.update(el,{x:w.x,y:w.y,w:w.w,h:w.h}); }); grid.batchUpdate(false); toast("Back to the default layout."); };
+
+/* ---------- widgets ---------- */
+async function loadStatus(){
+  try{
+    const s=await B("status"); const c=$("#conn");
+    if(s.ghl?.ok){ c.textContent="● "+s.ghl.location; c.className="pill ok"; } else { c.textContent="GoHighLevel: "+(s.ghl?.error||"not connected").slice(0,80); c.className="pill bad"; }
+    const locs=s.config?.locations||[], sel=$("#locSel");
+    if(locs.length>1){ if(sel.options.length!==locs.length){ sel.innerHTML=locs.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join(""); } sel.value=s.config.currentLocation; sel.classList.remove("hidden"); }
+    const lq=loc?"&location="+encodeURIComponent(loc):"";
+    const [p,st,d]=await Promise.all([B("proposals?status=pending"+lq),B("proposals?status=stale"+lq),B("proposals?status=done"+lq)]);
+    $("#wStatus").innerHTML=`<div><b>${p.proposals.length+st.proposals.length}</b><span>waiting for approval</span></div><div><b>${d.proposals.length}</b><span>changes approved and done</span></div><div><b>${esc(s.config?.currentLocation||"-")}</b><span>sub-account</span></div><div><b>${s.ghl?.ok?"Live":"Check"}</b><span>GoHighLevel link</span></div>`;
+  }catch(e){ $("#wStatus").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+function changes(p){
+  if(p.op==="contact.update"||p.op==="opportunity.update") return Object.entries(p.payload).map(([k,v])=>`${esc(k)}: <span class="o">${esc(p.before?.[k]??"")}</span> → <span class="n">${esc(v)}</span>`).join("<br>");
+  if(p.op==="contact.addTags") return `tags + <span class="n">${esc(p.payload.tags.join(", "))}</span>`;
+  if(p.op==="contact.removeTags") return `tags − <span class="o">${esc(p.payload.tags.join(", "))}</span>`;
+  if(p.op==="contact.addNote") return `note: <span class="n">${esc(p.payload.body)}</span>`;
+  if(p.op==="contact.delete") return `<span class="o">deletes ${esc(nm(p.before))}</span>`;
+  return esc(JSON.stringify(p.payload));
+}
+async function loadApprovals(){
+  const el=$("#wApprovals");
+  try{
+    const lq=loc?"&location="+encodeURIComponent(loc):"";
+    const list=[...(await B("proposals?status=stale"+lq)).proposals,...(await B("proposals?status=pending"+lq)).proposals];
+    if(!list.length){ el.innerHTML=`<div class="empty">Nothing waiting. Run a scan in Tasks.</div>`; return; }
+    el.innerHTML=(can("admin")?`<div class="row" style="margin-bottom:8px"><button class="green small" id="aAll">Approve all safe changes (${list.filter(p=>!p.destructive).length})</button></div>`:`<p class="sub">An admin approves these.</p>`)+
+      list.map(p=>`<div class="prop" data-id="${p.id}"><div class="t">${esc(p.label)}: ${esc(nm(p.before)||p.targetId||"new contact")}
+        <span class="tag">${esc(p.source)}</span>${p.destructive?`<span class="tag del">deletes</span>`:""}${p.status==="stale"?`<span class="tag stale">changed since proposed</span>`:""}</div>
+        ${p.reason?`<div class="r">${esc(p.reason)}</div>`:""}<div class="chg">${changes(p)}</div>
+        ${can("admin")?`<div class="row" style="margin-top:6px">${p.destructive?`<input class="cf" placeholder="Type DELETE" style="width:130px">`:""}<button class="green small" data-d="approve">Approve</button><button class="red small" data-d="reject">Reject</button></div>`:""}</div>`).join("");
+    el.querySelectorAll("[data-d]").forEach(b=>b.onclick=async()=>{ const card=b.closest("[data-id]");
+      try{ const r=await api("bridge/decide",{method:"POST",body:{id:card.dataset.id,decision:b.dataset.d,confirmText:card.querySelector(".cf")?.value||""}});
+        const s=r.proposal.status; toast(s==="done"?"Done. Changed in GoHighLevel.":s==="stale"?"That record changed. Check the new values and approve again.":s==="rejected"?"Rejected.":"Failed: "+(r.proposal.result||"")); }
+      catch(e){ toast(e.status===428?"Type DELETE in the box first.":e.message); } loadApprovals(); loadStatus(); });
+    const all=$("#aAll"); if(all) all.onclick=async()=>{ if(!confirm("Approve every non-delete change shown?")) return;
+      try{ const r=await api("bridge/decide",{method:"POST",body:{ids:list.filter(p=>!p.destructive).map(p=>p.id),decision:"approve"}}); toast(`${r.results.filter(x=>x.status==="done").length} done`); }catch(e){ toast(e.message); } loadApprovals(); loadStatus(); };
+  }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+document.querySelectorAll("[data-job]").forEach(b=>b.onclick=async()=>{
+  const out=$("#wTasks"); b.disabled=true; out.textContent="Scanning GoHighLevel…";
+  try{ const r=await api("bridge/jobs",{method:"POST",body:{job:b.dataset.job}});
+    out.textContent=Object.entries(r.summary).map(([k,v])=>v.report?`${k}: `+(v.report.length?v.report.join("; "):"all clean"):`${k}: found ${v.found}, proposed ${v.proposed}`).join("\n"); loadApprovals(); loadStatus(); }
+  catch(e){ out.textContent=e.message; } finally{ b.disabled=false; } });
+$("#cGo").onclick=async()=>{ const el=$("#wContacts"); el.innerHTML=`<div class="empty">Searching…</div>`;
+  try{ const j=await B("read?op=contacts.search&limit=50&query="+encodeURIComponent($("#cQ").value.trim())); const rows=j.contacts||[];
+    el.innerHTML=rows.length?`<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Tags</th></tr></thead><tbody>${rows.map(c=>`<tr><td>${esc(nm(c))}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${esc((c.tags||[]).join(", "))}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No contacts found.</div>`;
+  }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; } };
+$("#cQ").onkeydown=e=>{ if(e.key==="Enter") $("#cGo").click(); };
+async function loadActivity(){
+  const el=$("#wActivity"); if(!el) return;
+  try{ const [b,p]=await Promise.all([B("log"),api("events")]);
+    const rows=[...b.log.map(e=>({at:e.at,what:e.event,who:e.decidedBy||e.source||e.by||"",d:[e.op,e.targetId,e.location].filter(Boolean).join(" · ")})),...p.events.map(e=>({at:e.at,what:e.event,who:e.email||"",d:e.detail?.email||e.detail?.target||""}))].sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,80);
+    el.innerHTML=rows.length?`<table><tbody>${rows.map(r=>`<tr><td class="mono">${when(r.at)}</td><td>${esc(r.what)}</td><td class="mono">${esc(r.who)} ${esc(r.d)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No activity yet.</div>`;
+  }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+async function loadTeam(){
+  const el=$("#wTeam"); if(!el) return;
+  try{ const {users}=await api("users");
+    el.innerHTML=`<table><thead><tr><th>Person</th><th>Role</th><th>Last login</th><th></th></tr></thead><tbody>${users.map(x=>`<tr data-u="${x.id}"><td>${esc(x.name||"")} <span class="mono">${esc(x.email)}</span>${x.disabled?' <span class="tag del">disabled</span>':""}</td><td>${esc(x.role)}</td><td class="mono">${when(x.last_login)||"never"}</td>
+      <td>${x.role==="owner"||x.id===me.id?"":`<button class="ghost small" data-act="reset">New temp password</button> <button class="ghost small" data-act="${x.disabled?"enable":"disable"}">${x.disabled?"Enable":"Disable"}</button>`}</td></tr>`).join("")}</tbody></table>`;
+    el.querySelectorAll("[data-act]").forEach(b=>b.onclick=async()=>{ const id=b.closest("[data-u]").dataset.u;
+      try{ if(b.dataset.act==="reset"){ const r=await api(`users/${id}/reset`,{method:"POST"}); $("#tOut").innerHTML=`Temporary password (share it privately; they'll set their own): <span class="secret">${esc(r.tempPassword)}</span>`; }
+        else { await api(`users/${id}`,{method:"PATCH",body:{disabled:b.dataset.act==="disable"}}); toast(b.dataset.act==="disable"?"Disabled. Their sessions ended.":"Enabled."); }
+        loadTeam(); }catch(e){ toast(e.message); } });
+  }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+const tAdd=$("#tAdd"); if(tAdd) tAdd.onclick=async()=>{
+  try{ const r=await api("users",{method:"POST",body:{email:$("#tEmail").value,name:$("#tName").value,role:$("#tRole").value}});
+    $("#tOut").innerHTML=`Added ${esc(r.user.email)}. Temporary password (share it privately; they'll set their own): <span class="secret">${esc(r.tempPassword)}</span>`; $("#tEmail").value=$("#tName").value=""; loadTeam(); }
+  catch(e){ toast(e.message); } };
+const R={status:loadStatus,approvals:loadApprovals,activity:loadActivity};
+document.querySelectorAll("[data-refresh]").forEach(b=>b.onclick=()=>R[b.dataset.refresh]());
+$("#locSel").onchange=e=>{ loc=e.target.value; try{ sessionStorage.setItem("glytch_loc",loc); }catch{} $("#wContacts").innerHTML=""; refreshAll(); };
+function refreshAll(){ loadStatus(); loadApprovals(); loadActivity(); loadTeam(); }
+setInterval(()=>{ if(me&&!document.hidden&&!editing){ loadStatus(); } },60000);
+
+/* ---------- boot ---------- */
+api("me").then(r=>{ me=r.user; me.mustChange?show("pass"):start(); }).catch(()=>show("login"));
+</script>
+</body>
+</html>

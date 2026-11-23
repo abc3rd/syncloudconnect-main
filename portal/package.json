@@ -1,0 +1,19 @@
+{
+  "name": "glytch-portal",
+  "version": "1.0.0",
+  "description": "GLYTCH user access portal: logins, roles, Gridstack dashboard, bridge proxy. Omega UI, LLC / SynCloud Connect.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "gridstack": "^11.5.1",
+    "pg": "^8.23.1"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  }
+}
