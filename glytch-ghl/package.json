@@ -1,0 +1,9 @@
+{
+  "name": "glytch-ghl-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GLYTCH ⇄ GoHighLevel bridge: reads run, edits wait for approval. Omega UI, LLC / SynCloud Connect.",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node test/run.mjs" }
+}
