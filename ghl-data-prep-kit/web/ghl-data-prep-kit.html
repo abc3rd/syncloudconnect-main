@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GHL Data Prep Kit · SynCloud Connect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--mag:#ea00ea;--sil:#c3c3c3;--bg:#0b0b10;--panel:#14141c;--line:#2a2a36;--txt:#ececf2;--dim:#9a9aa8;--ok:#4bce2a;--warn:#ffb020;--bad:#ff4d6d;--blue:#2699fe}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#ea00ea22,transparent),var(--bg);color:var(--txt);font:16px/1.45 Rajdhani,system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:18px 28px;border-bottom:1px solid var(--line)}
+.logo{font:800 20px Orbitron,sans-serif;letter-spacing:.06em}
+.logo b{color:var(--mag)}
+.tag{font:12px 'Share Tech Mono',monospace;color:var(--sil);border:1px solid var(--line);padding:3px 8px;border-radius:20px}
+nav{margin-left:auto;display:flex;gap:6px}
+nav button{background:none;border:1px solid var(--line);color:var(--sil);padding:8px 14px;border-radius:8px;font:600 15px Rajdhani;cursor:pointer}
+nav button.on{border-color:var(--mag);color:#fff;background:#ea00ea1a}
+main{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+h2{font:600 18px Orbitron,sans-serif;letter-spacing:.04em;margin:0 0 4px}
+.sub{color:var(--dim);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}header{flex-wrap:wrap}nav{margin-left:0}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+#drop{border:2px dashed #ea00ea66;border-radius:14px;padding:34px 18px;text-align:center;cursor:pointer;transition:.15s}
+#drop.hover{background:#ea00ea14;border-color:var(--mag)}
+#drop strong{font:600 17px Orbitron;display:block;margin-bottom:6px}
+#files{margin-top:10px;font:13px 'Share Tech Mono';color:var(--sil)}
+label{display:block;font-weight:600;color:var(--sil);margin:10px 0 4px;font-size:14px}
+input,select,textarea{width:100%;background:#0e0e15;border:1px solid var(--line);color:var(--txt);padding:9px 10px;border-radius:8px;font:15px Rajdhani}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--mag)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--mag);color:#fff;border:0;padding:12px 20px;border-radius:10px;font:700 16px Rajdhani;cursor:pointer;letter-spacing:.03em}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--sil)}
+.btn.small{padding:7px 12px;font-size:14px}
+#run{width:100%;justify-content:center;margin-top:16px;font-size:18px}
+.steps{font:13px/1.9 'Share Tech Mono';color:var(--sil);min-height:120px}
+.steps div::before{content:"▸ ";color:var(--mag)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .n{font:800 28px Orbitron}
+.stat .l{color:var(--dim);font-size:13px}
+.stat.tyrq{border-color:var(--mag);background:linear-gradient(135deg,#ea00ea22,transparent)}
+.status{display:inline-block;padding:4px 12px;border-radius:20px;font:700 14px Rajdhani;letter-spacing:.05em}
+.PASS{background:#4bce2a22;color:var(--ok)}.PASSWITHREVIEW{background:#ffb02022;color:var(--warn)}.FAIL{background:#ff4d6d22;color:var(--bad)}
+.tablewrap{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:#1b1b26;color:var(--sil);font-weight:600}
+td.note{color:var(--warn)}
+.dl{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.hidden{display:none}
+.tpl{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:#0e0e15}
+.tpl h3{margin:0 0 2px;font:600 16px Rajdhani}
+.tpl .use{color:var(--dim);font-size:13px;margin-bottom:8px}
+.tpl pre{white-space:pre-wrap;margin:0;font:14px/1.5 'Share Tech Mono';color:#e6e6ee}
+.tpl pre .v{color:var(--mag)}
+.chip{display:inline-block;font:12px 'Share Tech Mono';border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--sil);margin-right:6px}
+footer{text-align:center;color:var(--dim);font-size:13px;padding:20px}
+footer a{color:var(--sil)}
+.mono{font-family:'Share Tech Mono',monospace}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>GHL</b> DATA PREP KIT</div>
+  <span class="tag">by SynCloud Connect</span>
+  <nav>
+    <button data-tab="prep" class="on">Prep &amp; Import</button>
+    <button data-tab="tpl">Templates</button>
+    <button data-tab="about">How it works</button>
+  </nav>
+</header>
+
+<main>
+<!-- ============ PREP TAB ============ -->
+<section id="tab-prep">
+  <h2>Drop your lists. Get import-ready files.</h2>
+  <p class="sub">Merges, maps, cleans, de-duplicates, tags, checks and splits your contacts for GoHighLevel. Everything runs in this browser tab; your data is never uploaded.</p>
+  <div class="grid">
+    <div class="card">
+      <div id="drop" tabindex="0">
+        <strong>Drop CSV files here</strong>
+        <span class="sub">or click to choose · several files are merged into one list</span>
+        <input id="fileInput" type="file" accept=".csv,.txt,.tsv" multiple hidden>
+        <div id="files"></div>
+      </div>
+      <div class="row2">
+        <div><label for="tags">Tags to add (comma-separated)</label><input id="tags" placeholder="nov-import, fb-ads"></div>
+        <div><label for="source">Lead source (if blank)</label><input id="source" placeholder="Facebook Ads"></div>
+      </div>
+      <div class="row2">
+        <div><label for="mb">Max file size (MB)</label><input id="mb" type="number" min="1" step="1" value="30" title="GoHighLevel documents 30 MB. Raise it if your account allows more."></div>
+        <div><label for="rows">Max rows per file (optional)</label><input id="rows" type="number" min="0" placeholder="no limit"></div>
+      </div>
+      <div class="row2">
+        <div><label for="by">Also split by column (optional)</label><input id="by" placeholder="e.g. State or Tags"></div>
+        <div></div>
+      </div>
+      <div class="row2">
+        <div><label for="cc">Default country code</label><select id="cc"><option value="1">+1 US / Canada</option><option value="44">+44 UK</option><option value="61">+61 Australia</option><option value="52">+52 Mexico</option><option value="34">+34 Spain</option></select></div>
+        <div><label for="name">Output file name</label><input id="name" placeholder="leads_ghl"></div>
+      </div>
+      <button id="run" class="btn" disabled>Run the assembly line</button>
+    </div>
+    <div class="card">
+      <h2 style="font-size:15px">Assembly line</h2>
+      <div class="steps" id="steps"><div>Waiting for files…</div></div>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:24px"><h2>Result</h2><span id="status" class="status"></span></div>
+    <div class="stats">
+      <div class="stat tyrq"><div class="n" id="sTyrq">–</div><div class="l">TYRQ score · auto-fixed vs. left for a person</div></div>
+      <div class="stat"><div class="n" id="sReady">–</div><div class="l">rows ready to import</div></div>
+      <div class="stat"><div class="n" id="sFixed">–</div><div class="l">automatic fixes</div></div>
+      <div class="stat"><div class="n" id="sReview">–</div><div class="l">rows held for review</div></div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:15px">Download</h2>
+      <div class="dl" id="downloads"></div>
+      <div class="tablewrap" id="preview"></div>
+      <div id="reviewWrap" class="hidden"><h2 style="font-size:15px;margin-top:18px">Held for review</h2><div class="tablewrap" id="reviewTable"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TEMPLATES TAB ============ -->
+<section id="tab-tpl" class="hidden">
+  <h2>Fill-in-the-blank templates</h2>
+  <p class="sub">Type your details once. Every SMS, email and workflow below fills itself in. Leave FIRST_NAME and APPOINTMENT_TIME as-is so GoHighLevel fills them per contact.</p>
+  <div class="grid">
+    <div class="card" id="varForm"></div>
+    <div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn small ghost" data-g="sms">SMS</button><button class="btn small ghost" data-g="email">Email</button><button class="btn small ghost" data-g="workflows">Workflows</button>
+        <button class="btn small" id="dlTpl" style="margin-left:auto">Download all (.zip)</button>
+      </div>
+      <div id="tplList"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABOUT TAB ============ -->
+<section id="tab-about" class="hidden">
+  <div class="card">
+    <h2>What each step does</h2>
+    <ol style="line-height:1.9">
+      <li><b>Merge</b>: combines every file you drop into one list.</li>
+      <li><b>Map</b>: renames columns like "Cell Phone", "E-mail Address" and "Zip" to GoHighLevel field names, and splits "Full Name" into first and last.</li>
+      <li><b>Clean</b>: phones to +1XXXXXXXXXX format, emails lowercased with common typos fixed (gmial.com, .con), names out of ALL CAPS, state names to 2 letters, ZIP codes that lost their leading zero, websites with https://.</li>
+      <li><b>Dedupe</b>: merges contacts that share an email or phone, keeping every filled-in field and every tag.</li>
+      <li><b>Stamp</b>: adds your tags and lead source so imported contacts drop straight into the right workflow.</li>
+      <li><b>Precheck</b>: holds back rows with no valid email or phone, and notes fixable problems on rows that can still import.</li>
+      <li><b>Split</b>: cuts the clean list into files under your size limit (GoHighLevel documents 30 MB; raise it if your account allows more), with an optional row cap, and optionally one set per state or tag.</li>
+    </ol>
+    <p><b>TYRQ score</b>: of all the problems found, the share the kit fixed on its own. 100 means nothing was left for a person to handle.</p>
+    <p class="sub">Command-line version for agencies and bulk jobs: <span class="mono">python ghl_prepkit.py run *.csv --outdir out</span></p>
+  </div>
+</section>
+</main>
+<footer>GHL Data Prep Kit v1.0 · © Omega UI, LLC · <a href="https://nexus.syncloudconnect.store">nexus.syncloudconnect.store</a> · ucp@syncloudconnect.com<br>Not affiliated with HighLevel Inc.</footer>
+
+<script>
+const TEMPLATES = {"pack": "GHL Fill-in-the-Blank Pack by SynCloud Connect", "version": "1.0.0", "variables": {"BUSINESS_NAME": "Your business name as customers know it", "OWNER_NAME": "Name that signs the messages", "FIRST_NAME": "Leave as {{contact.first_name}} to let GoHighLevel fill it per contact", "SERVICE": "What you do, in the customer's words (e.g. AC repair)", "OFFER": "The specific offer (e.g. $49 tune-up)", "DEADLINE": "When the offer ends (e.g. Friday at 5pm)", "BOOKING_LINK": "Your calendar or booking link", "REVIEW_LINK": "Direct link to your Google review form", "PHONE": "Business phone number", "APPOINTMENT_TIME": "Leave as {{appointment.start_time}} in GoHighLevel", "CITY": "City or service area", "DAYS_SINCE": "How long since the last visit (e.g. 6 months)"}, "templates": {"sms": [{"id": "sms-missed-call-text-back", "name": "Missed-call text back", "use": "Fires within 1 minute of a missed call so the lead doesn't call the next business on the list.", "body": "Hi, this is [OWNER_NAME] with [BUSINESS_NAME]. Sorry I missed your call! I'm on a job right now. What can I help you with? You can also grab a time here: [BOOKING_LINK]"}, {"id": "sms-speed-to-lead", "name": "New lead: first touch", "use": "Sent the moment a form or ad lead comes in.", "body": "Hi [FIRST_NAME], [OWNER_NAME] from [BUSINESS_NAME] here. Got your request about [SERVICE]. Is now a good time for a quick call, or would you rather pick a time? [BOOKING_LINK]"}, {"id": "sms-appointment-reminder", "name": "Appointment reminder", "use": "24 hours and 2 hours before the appointment.", "body": "Hi [FIRST_NAME], quick reminder: [BUSINESS_NAME] is scheduled for [APPOINTMENT_TIME]. Reply C to confirm or R to reschedule."}, {"id": "sms-review-request", "name": "Review request", "use": "2 hours after a job is marked complete.", "body": "Thanks for choosing [BUSINESS_NAME], [FIRST_NAME]! If we did a good job, would you mind leaving a quick review? It takes 30 seconds and helps a small business a lot: [REVIEW_LINK]"}, {"id": "sms-reactivation", "name": "Win-back / reactivation", "use": "Customers with no visit in [DAYS_SINCE]. Acknowledge the gap; don't pitch hard.", "body": "Hi [FIRST_NAME], it's [OWNER_NAME] at [BUSINESS_NAME]. It's been about [DAYS_SINCE] and I wanted to check in. If you need anything, we're holding [OFFER] for past customers until [DEADLINE]. Just reply here."}, {"id": "sms-offer-deadline", "name": "Offer with a deadline", "use": "Short promo blast to an opted-in list.", "body": "[BUSINESS_NAME]: [OFFER] for [CITY] customers, ends [DEADLINE]. Book here: [BOOKING_LINK]. Reply STOP to opt out."}], "email": [{"id": "email-welcome", "name": "Welcome / what happens next", "use": "Right after a new lead or customer signs up.", "subject": "Welcome to [BUSINESS_NAME], [FIRST_NAME]", "body": "Hi [FIRST_NAME],\n\nThanks for reaching out to [BUSINESS_NAME]. Here's what happens next:\n\n1. We'll review what you need for [SERVICE].\n2. You'll hear from me within one business day.\n3. If you'd rather not wait, pick a time that works for you: [BOOKING_LINK]\n\nTalk soon,\n[OWNER_NAME]\n[BUSINESS_NAME] | [PHONE]"}, {"id": "email-quote-follow-up", "name": "Quote follow-up", "use": "3 days after sending a quote with no reply.", "subject": "Any questions on your [SERVICE] quote?", "body": "Hi [FIRST_NAME],\n\nI wanted to make sure the quote for [SERVICE] came through and made sense. If anything's unclear or you'd like to adjust the scope, just reply and I'll sort it out.\n\nIf you're ready to go, you can lock in a date here: [BOOKING_LINK]\n\n[OWNER_NAME]\n[BUSINESS_NAME]"}, {"id": "email-reactivation", "name": "We miss you", "use": "Past customers with no activity in [DAYS_SINCE].", "subject": "[FIRST_NAME], it's been a while", "body": "Hi [FIRST_NAME],\n\nIt's been about [DAYS_SINCE] since we last saw you at [BUSINESS_NAME], and I wanted to say thanks for being a customer.\n\nIf there's anything you need, we're offering [OFFER] to past customers through [DEADLINE].\n\nReply to this email or book here: [BOOKING_LINK]\n\n[OWNER_NAME]"}, {"id": "email-review-request", "name": "Review request (email)", "use": "Backup to the SMS review request, sent the next day if no review.", "subject": "How did we do, [FIRST_NAME]?", "body": "Hi [FIRST_NAME],\n\nThanks again for trusting [BUSINESS_NAME] with your [SERVICE]. If you have 30 seconds, a review helps other people in [CITY] find us:\n\n[REVIEW_LINK]\n\nIf anything wasn't right, reply here and I'll make it right.\n\n[OWNER_NAME]"}], "workflows": [{"id": "workflow-missed-call-text-back", "name": "Missed-call text back (GHL workflow blueprint)", "use": "Build this in Automation > Workflows.", "steps": ["Trigger: Call Status = missed / no answer (inbound).", "Wait: 1 minute.", "Action: Send SMS using 'sms-missed-call-text-back'.", "Condition: Contact replied within 30 minutes? If yes: notify [OWNER_NAME] and stop.", "If no: Wait 1 day, send 'sms-speed-to-lead'.", "Action: Add tag 'missed-call'; create opportunity in pipeline stage 'New Lead'."]}, {"id": "workflow-new-lead", "name": "New lead nurture (GHL workflow blueprint)", "use": "For form, ad and imported leads tagged by the Data Prep Kit.", "steps": ["Trigger: Contact Tag added = your import tag (set with --tags in the Data Prep Kit).", "Action: Send 'sms-speed-to-lead' immediately (business hours only).", "Action: Send 'email-welcome'.", "Wait: 2 days. If no booking: send 'email-quote-follow-up' or a second SMS.", "Wait: 5 days. If still no reply: add tag 'cold' and move to the long-term nurture list.", "Goal: Appointment booked > remove from workflow."]}, {"id": "workflow-review-engine", "name": "Review engine (GHL workflow blueprint)", "use": "Turns every completed job into a review request.", "steps": ["Trigger: Opportunity moved to 'Won' or appointment status 'Showed'.", "Wait: 2 hours.", "Action: Send 'sms-review-request'.", "Wait: 1 day. Condition: review left? If no: send 'email-review-request'.", "Action: Add tag 'review-asked' so nobody gets asked twice."]}, {"id": "workflow-reactivation", "name": "Reactivation campaign (GHL workflow blueprint)", "use": "Run monthly on customers with no activity in [DAYS_SINCE].", "steps": ["Trigger: Smart list of customers with last appointment older than [DAYS_SINCE] (or import that list with tag 'reactivate').", "Action: Send 'sms-reactivation'.", "Wait: 3 days. If no reply: send 'email-reactivation'.", "Condition: replied or booked? Notify [OWNER_NAME] and remove tag 'reactivate'.", "If no response after 14 days: add tag 'dormant' and stop."]}]}};
+
+/* ===================== ENGINE (mirror of ghl_prepkit.py) ===================== */
+const GHL_FIELDS = {
+ "First Name":["primer nombre","first name","first","fname","firstname","given name","forename"],
+ "Last Name":["apellido","apellidos","last name","last","lname","lastname","surname","family name"],
+ "Email":["correo","correo electronico","email","e-mail","email address","e-mail address","mail","primary email"],
+ "Phone":["telefono","celular","movil","numero de telefono","whatsapp","phone","phone #","phone number","phone no","mobile","mobile phone","mobile number","cell","cell phone","cellphone","telephone","tel","primary phone","contact number"],
+ "Company Name":["empresa","negocio","compania","company","company name","business","business name","organization","organisation","org","employer","account name"],
+ "Address":["direccion","calle","address","address1","address 1","address line 1","street","street address","mailing address"],
+ "City":["ciudad","municipio","city","town","locality"],
+ "State":["estado","provincia","state","province","region","st","state/province"],
+ "Postal Code":["codigo postal","cp","postal code","zip","zip code","zipcode","postcode","postal","zip/postal code"],
+ "Country":["pais","country","country code","nation"],
+ "Website":["sitio web","pagina web","website","web site","url","site","web","homepage","web address"],
+ "Tags":["etiquetas","etiqueta","tags","tag","labels","label","segments"],
+ "Source":["fuente","origen del lead","source","lead source","leadsource","origin","channel","utm source"],
+ "Date of Birth":["fecha de nacimiento","cumpleanos","date of birth","dob","birthday","birth date","birthdate"]};
+const FULL_NAME = new Set(["nombre","nombre completo","cliente","name","full name","fullname","contact name","contact","customer name","client name"]);
+const US_STATES = {alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",indiana:"IN",iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",massachusetts:"MA",michigan:"MI",minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",nebraska:"NE",nevada:"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY","puerto rico":"PR"};
+const US_ABBR = new Set(Object.values(US_STATES));
+const EMAIL_TYPOS = {"gmial.com":"gmail.com","gmai.com":"gmail.com","gmal.com":"gmail.com","gamil.com":"gmail.com","gmail.co":"gmail.com","gmail.con":"gmail.com","gnail.com":"gmail.com","hotmial.com":"hotmail.com","hotmal.com":"hotmail.com","hotmail.con":"hotmail.com","yaho.com":"yahoo.com","yahooo.com":"yahoo.com","yahoo.con":"yahoo.com","outlok.com":"outlook.com","outlook.con":"outlook.com","iclod.com":"icloud.com","aol.con":"aol.com"};
+const EMAIL_RE = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const normKey = h => h.normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase().replace(/_/g," ").replace(/[^a-z0-9#/ ]/g,"").trim();
+
+function parseCSV(text){
+  text = text.replace(/^﻿/,"");
+  const first = text.slice(0, Math.min(text.length, 20000)).split(/\r?\n/,1)[0]||"";
+  const delim = [",",";","\t","|"].map(d=>[d,first.split(d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[], n=text.length; let i=0;
+  while(i<n){
+    const row=[];
+    for(;;){
+      let cell;
+      if(text.charCodeAt(i)===34){ // quoted cell
+        let j=i+1, parts=[];
+        for(;;){ const q=text.indexOf('"',j); if(q<0){ parts.push(text.slice(j)); i=n; break; }
+          if(text.charCodeAt(q+1)===34){ parts.push(text.slice(j,q+1)); j=q+2; } else { parts.push(text.slice(j,q)); i=q+1; break; } }
+        cell=parts.join("");
+        while(i<n && text[i]!==delim && text[i]!=="\n" && text[i]!=="\r") cell+=text[i++];
+      } else {
+        let j=i; while(j<n){ const c=text.charCodeAt(j); if(c===10||c===13||text[j]===delim) break; j++; }
+        cell=text.slice(i,j); i=j;
+      }
+      row.push(cell);
+      if(i<n && text[i]===delim){ i++; continue; }
+      if(text[i]==="\r") i++; if(text[i]==="\n") i++;
+      break;
+    }
+    rows.push(row);
+  }
+  if(!rows.length) return {headers:[],rows:[]};
+  const seen={}; const headers = rows[0].map(h=>{ h=(h||"").trim()||"Column"; if(seen[h]){seen[h]++; return `${h} (${seen[h]})`;} seen[h]=1; return h; });
+  const out=[];
+  for(let r=1;r<rows.length;r++){ const row=rows[r];
+    if(!row.some(c=>c && c.trim())) continue;
+    const o={}; for(let k=0;k<headers.length;k++) o[headers[k]]=row[k]??""; out.push(o);
+  }
+  return {headers, rows:out};
+}
+function toCSV(headers, rows){
+  headers = headers.filter(h=>!h.startsWith("_"));
+  const esc = v => { v = v==null?"":String(v); return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  return [headers.map(esc).join(","), ...rows.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\r\n")+"\r\n";
+}
+const fix = (r,n=1)=> r._fixes=(r._fixes||0)+n;
+const warn = (r,m)=> (r._warns=r._warns||[]).push(m);
+const issue = (r,m)=> (r._issues=r._issues||[]).push(m);
+
+function mapFields(headers, rows){
+  const lookup={};
+  for(const [t,al] of Object.entries(GHL_FIELDS)){ lookup[normKey(t)]=t; al.forEach(a=>lookup[normKey(a)]=t); }
+  const mapping={}, used=new Set();
+  headers.forEach(h=>{ const t=lookup[normKey(h)]; if(t&&!used.has(t)){mapping[h]=t;used.add(t);} else mapping[h]=h; });
+  const changes={}; Object.entries(mapping).forEach(([k,v])=>{ if(k!==v) changes[k]=v; });
+  let nh=[]; headers.forEach(h=>{ if(!nh.includes(mapping[h])) nh.push(mapping[h]); });
+  const fullCol = headers.find(h=>FULL_NAME.has(normKey(h)) && mapping[h]===h);
+  const out = rows.map(r=>{
+    const nr={};
+    headers.forEach(h=>{ const t=mapping[h]; if(nr[t] && !r[h]) return; nr[t]=r[h]??""; });
+    if(fullCol && !(nr["First Name"]||"").trim()){
+      const p=(r[fullCol]||"").trim().split(/\s+/).filter(Boolean);
+      if(p.length){ nr["First Name"]=p[0]; nr["Last Name"]=p.slice(1).join(" "); fix(nr); }
+    }
+    if(fullCol) delete nr[fullCol];
+    return nr;
+  });
+  if(fullCol){ const i=nh.indexOf(fullCol); nh.splice(i,1,...["First Name","Last Name"].filter(f=>!nh.includes(f))); changes[fullCol]="First Name + Last Name"; }
+  const core=Object.keys(GHL_FIELDS).filter(f=>nh.includes(f));
+  return {headers:[...core,...nh.filter(h=>!core.includes(h))], rows:out, changes};
+}
+function cleanPhone(v, cc){
+  v=(v||"").trim(); if(!v) return [ "",false,true ];
+  let v2=v.split(/\s*(?:ext\.?|extension|x|#)\s*\d+\s*$/i)[0].trim();
+  const plus=v2.startsWith("+")||v2.startsWith("00");
+  let d=v2.replace(/\D/g,""); if(v2.startsWith("00")) d=d.slice(2);
+  let out;
+  if(plus) out="+"+d;
+  else if(d.length===10&&cc==="1") out="+1"+d;
+  else if(d.length===11&&d.startsWith("1")&&cc==="1") out="+"+d;
+  else if(cc!=="1"&&d.startsWith("0")) out="+"+cc+d.replace(/^0+/,"");
+  else if(d.length>10) out="+"+d;
+  else out="+"+cc+d;
+  let ok = out.length-1>=8 && out.length-1<=15;
+  if(cc==="1"&&out.startsWith("+1")&&out.length!==12) ok=false;
+  if(!ok) return [v,false,false];
+  return [out,out!==v,true];
+}
+function cleanEmail(v){
+  v=(v||"").trim().replace(/^<|>$/g,"").trim(); if(!v) return ["",false,true];
+  let e=v.toLowerCase().replace(/ /g,"").replace(/,/g,".").replace(/^mailto:/,"");
+  if(e.includes("@")){ const i=e.lastIndexOf("@"); let dom=e.slice(i+1); dom=EMAIL_TYPOS[dom]||dom; dom=dom.replace(/\.(con|cmo|ocm)$/,".com"); e=e.slice(0,i)+"@"+dom; }
+  if(!EMAIL_RE.test(e)) return [v,false,false];
+  return [e,e!==v,true];
+}
+function cleanName(v){
+  v=(v||"").replace(/\s+/g," ").trim();
+  if(v && (v===v.toUpperCase()||v===v.toLowerCase()) && /[a-z]/i.test(v)){
+    v=v.toLowerCase().replace(/(^|[\s\-'])([a-z])/g,(m,a,b)=>a+b.toUpperCase()).replace(/\bMc([a-z])/g,(m,a)=>"Mc"+a.toUpperCase());
+  }
+  return v;
+}
+function cleanRows(headers, rows, cc){
+  const s={phones_fixed:0,phones_invalid:0,emails_fixed:0,emails_invalid:0,names_fixed:0,states_fixed:0,zips_fixed:0,websites_fixed:0};
+  for(const r of rows){
+    headers.forEach(h=>{ if(typeof r[h]==="string") r[h]=r[h].replace(/ /g," ").replace(/[ \t]+/g," ").trim(); });
+    if("Phone" in r){ const [p,ch,ok]=cleanPhone(r.Phone,cc); if(!ok){s.phones_invalid++; warn(r,"Phone not valid: "+r.Phone); r.Phone="";} else if(ch){r.Phone=p; s.phones_fixed++; fix(r);} }
+    if("Email" in r){ const [e,ch,ok]=cleanEmail(r.Email); if(!ok){s.emails_invalid++; warn(r,"Email not valid: "+r.Email); r.Email="";} else if(ch){r.Email=e; s.emails_fixed++; fix(r);} }
+    ["First Name","Last Name","City"].forEach(f=>{ if(r[f]){ const n=cleanName(r[f]); if(n!==r[f]){r[f]=n; s.names_fixed++; fix(r);} } });
+    const country=(r.Country||"").trim().toLowerCase(); const isUS=["","us","usa","united states","united states of america"].includes(country);
+    if(r.State){ const st=r.State.trim(); if(US_STATES[st.toLowerCase()]){r.State=US_STATES[st.toLowerCase()]; s.states_fixed++; fix(r);} else if(US_ABBR.has(st.toUpperCase())&&st!==st.toUpperCase()){r.State=st.toUpperCase(); s.states_fixed++; fix(r);} }
+    if(r["Postal Code"]&&isUS){ const z=r["Postal Code"].trim(); if(/^\d{3,4}$/.test(z)){r["Postal Code"]=z.padStart(5,"0"); s.zips_fixed++; fix(r);} else if(/^\d{9}$/.test(z)){r["Postal Code"]=z.slice(0,5)+"-"+z.slice(5); s.zips_fixed++; fix(r);} }
+    if(r.Website){ const w=r.Website.trim(); if(w.includes(".")&&!/^https?:\/\//i.test(w)){ r.Website="https://"+w.replace(/^\/+/,""); s.websites_fixed++; fix(r);} }
+  }
+  return s;
+}
+const splitTags = v => (v||"").split(/[,;|]/).map(t=>t.trim()).filter(Boolean);
+function dedupe(headers, rows){
+  const idx={}, out=[]; let merged=0;
+  for(const r of rows){
+    let found=null;
+    for(const k of ["Email","Phone"]){ const v=(r[k]||"").trim().toLowerCase(); if(v&&idx[k+":"+v]){found=idx[k+":"+v];break;} }
+    if(!found){ out.push(r); found=r; }
+    else { merged++;
+      headers.forEach(h=>{
+        if(h==="Tags"){ const a=splitTags(found.Tags); splitTags(r.Tags).forEach(t=>{ if(!a.includes(t)) a.push(t); }); found.Tags=a.join(", "); }
+        else if(!(found[h]||"").trim() && (r[h]||"").trim()) found[h]=r[h];
+      });
+      (r._warns||[]).forEach(w=>{ if(!(found._warns||[]).includes(w) && !( (w.startsWith("Phone")&&found.Phone) || (w.startsWith("Email")&&found.Email) )) warn(found,w); });
+      fix(found);
+    }
+    ["Email","Phone"].forEach(k=>{ const v=(found[k]||"").trim().toLowerCase(); if(v) idx[k+":"+v]=found; });
+  }
+  return {rows:out, merged};
+}
+function stamp(headers, rows, tags, source){
+  headers=[...headers]; const nt=splitTags(tags);
+  if(nt.length&&!headers.includes("Tags")) headers.push("Tags");
+  if(source&&!headers.includes("Source")) headers.push("Source");
+  rows.forEach(r=>{
+    if(nt.length){ const c=splitTags(r.Tags); nt.forEach(t=>{ if(!c.includes(t)) c.push(t); }); r.Tags=c.join(", "); }
+    if(source&&!(r.Source||"").trim()) r.Source=source;
+  });
+  return headers;
+}
+function precheck(rows){
+  const ready=[], review=[];
+  rows.forEach(r=>{
+    if(!(r.Email||"").trim()&&!(r.Phone||"").trim()) issue(r,"No valid email or phone (GHL needs at least one)");
+    if(r._issues){ (r._warns||[]).forEach(w=>{ if(!r._issues.includes(w)) r._issues.push(w); }); review.push(r); } else ready.push(r);
+  });
+  const auto=rows.reduce((a,r)=>a+(r._fixes||0),0);
+  const human=rows.reduce((a,r)=>a+((r._issues||[]).length||(r._warns||[]).length),0);
+  return {ready, review, auto, human,
+    tyrq: (auto+human)? Math.round(100*auto/(auto+human)) : 100,
+    readiness: Math.round(100*ready.length/(rows.length||1)),
+    withNotes: ready.filter(r=>r._warns).length,
+    status: !review.length ? "PASS" : (ready.length ? "PASS WITH REVIEW" : "FAIL")};
+}
+const safe = s => (s||"").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"").slice(0,60)||"blank";
+function chunkRows(headers, rows, size, maxMb){
+  const enc=new TextEncoder(), vis=headers.filter(h=>!h.startsWith("_"));
+  const lineBytes = r => enc.encode(toCSV(vis,[r]).split("\r\n")[1]+"\r\n").length;
+  const headB = enc.encode(vis.join(",")+"\r\n").length, limit = maxMb ? Math.floor(maxMb*1048576*0.97) : 0;
+  const out=[]; let cur=[], b=headB;
+  for(const r of rows){ const rb=lineBytes(r); if(cur.length && ((limit && b+rb>limit) || (size && cur.length>=size))){ out.push(cur); cur=[]; b=headB; } cur.push(r); b+=rb; }
+  if(cur.length || !out.length) out.push(cur);
+  return out;
+}
+function splitRows(headers, rows, stem, size, by, maxMb){
+  const files=[];
+  const chunk=(list,base)=>{ const parts=chunkRows(headers,list,size,maxMb); parts.forEach((p,i)=>{ const data=toCSV(headers,p); files.push({name: parts.length>1?`${base}_part${String(i+1).padStart(2,"0")}.csv`:`${base}.csv`, data, rows:p.length, mb:(new Blob([data]).size/1048576)}); }); };
+  if(by){ const g={}; rows.forEach(r=>{ const k=(r[by]||"").trim()||"blank"; (g[k]=g[k]||[]).push(r); }); Object.entries(g).forEach(([k,l])=>chunk(l,`${stem}_${safe(k)}`)); }
+  else chunk(rows, stem);
+  return files;
+}
+
+/* ===================== ZIP (store-only, no library) ===================== */
+const CRC = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+const crc32 = b => { let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=CRC[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+function makeZip(files){
+  const enc=new TextEncoder(), parts=[], central=[]; let offset=0;
+  for(const f of files){
+    const name=enc.encode(f.name), data=typeof f.data==="string"?enc.encode(f.data):f.data, crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true); h.setUint16(26,name.length,true);
+    parts.push(new Uint8Array(h.buffer),name,data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true);
+    c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true); c.setUint16(28,name.length,true); c.setUint32(42,offset,true);
+    central.push(new Uint8Array(c.buffer),name);
+    offset+=30+name.length+data.length;
+  }
+  const csize=central.reduce((a,b)=>a+b.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,csize,true); e.setUint32(16,offset,true);
+  return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:"application/zip"});
+}
+function download(name, data, type="text/csv"){
+  const blob = data instanceof Blob ? data : new Blob([data],{type});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ===================== UI: PREP ===================== */
+const $ = s => document.querySelector(s);
+let loaded=[];
+const drop=$("#drop"), fi=$("#fileInput");
+drop.onclick=()=>fi.click();
+drop.onkeydown=e=>{ if(e.key==="Enter"||e.key===" ") fi.click(); };
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hover");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hover");}));
+drop.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
+fi.onchange=()=>addFiles(fi.files);
+async function addFiles(list){
+  for(const f of list){ loaded.push({name:f.name, text: await f.text()}); }
+  $("#files").innerHTML = loaded.map(f=>"✓ "+escapeHtml(f.name)).join("<br>");
+  if(!$("#name").value && loaded[0]) $("#name").placeholder = safe(loaded[0].name.replace(/\.[^.]+$/,""))+"_ghl";
+  $("#run").disabled = !loaded.length;
+}
+const escapeHtml = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let lastRun=null;
+
+$("#run").onclick = () => {
+  const steps=$("#steps"); steps.innerHTML="<div>Working… large files can take up to a minute.</div>";
+  $("#run").disabled=true; setTimeout(()=>{ try{ runPipeline(); } catch(err){ steps.insertAdjacentHTML("beforeend",`<div style="color:var(--bad)">Error: ${escapeHtml(err.message)}</div>`); } finally { $("#run").disabled=false; } }, 30);
+};
+function runPipeline(){
+  const steps=$("#steps"); steps.innerHTML="";
+  const log = m => { const d=document.createElement("div"); d.textContent=m; steps.appendChild(d); };
+  const cc=$("#cc").value, size=Math.max(0,parseInt($("#rows").value)||0), maxMb=Math.max(1,parseFloat($("#mb").value)||30), by=$("#by").value.trim();
+  const stem=safe($("#name").value || $("#name").placeholder || "leads_ghl");
+  let headers=[], rows=[], changes={};
+  for(const f of loaded){ const p=parseCSV(f.text); const m=mapFields(p.headers,p.rows); Object.assign(changes,m.changes); m.headers.forEach(h=>{ if(!headers.includes(h)) headers.push(h); }); for(const r of m.rows) rows.push(r); }
+  const core=Object.keys(GHL_FIELDS).filter(f=>headers.includes(f)); headers=[...core,...headers.filter(h=>!core.includes(h))];
+  if(!headers.includes("Email")&&!headers.includes("Phone")) log(`WARNING: no email or phone column recognized. Rename that column (e.g. "Phone") and run again.`);
+  log(`merge     ${loaded.length} file(s), ${rows.length} rows`);
+  log(`map       ${Object.keys(changes).length} column(s) renamed`);
+  const cs=cleanRows(headers,rows,cc); log(`clean     ${cs.phones_fixed} phones, ${cs.emails_fixed} emails fixed`);
+  const d=dedupe(headers,rows); rows=d.rows; log(`dedupe    ${d.merged} duplicate(s) merged`);
+  headers=stamp(headers,rows,$("#tags").value,$("#source").value.trim()); log(`stamp     tags and source applied`);
+  rows.forEach(r=>{ if(r._warns) r["Prep Notes"]=r._warns.join("; "); });
+  if(rows.some(r=>r._warns)) headers.push("Prep Notes");
+  const pc=precheck(rows); log(`precheck  ${pc.status}: ${pc.ready.length} ready, ${pc.review.length} held`);
+  if(by && !headers.includes(by)) log(`note      column "${by}" not found, split by row count only`);
+  const files=splitRows(headers,pc.ready,stem,size,headers.includes(by)?by:"",maxMb);
+  log(`split     ${files.length} import file(s), each under ${maxMb} MB${size?` and ${size} rows`:""}`);
+  if(pc.review.length){ pc.review.forEach(r=>r.Issues=r._issues.join("; ")); files.push({name:`${stem}_NEEDS_REVIEW.csv`, data:toCSV([...headers.filter(h=>h!=="Prep Notes"),"Issues"],pc.review), review:true}); }
+  const report = buildReport({stem,changes,cs,merged:d.merged,pc,files,total:rows.length+d.merged});
+  files.push({name:"report.md", data:report, type:"text/markdown"});
+  lastRun={files,stem};
+  render(headers,pc,files);
+}
+function buildReport(o){
+  const L=[`# GHL Data Prep Kit — Import Report`,`Generated ${new Date().toLocaleString()}`,``,
+  `**Status: ${o.pc.status}** · TYRQ **${o.pc.tyrq}** · Readiness **${o.pc.readiness}%**`,``,
+  `| Step | Result |`,`|---|---|`,`| Rows in | ${o.total} |`,`| Columns renamed | ${Object.keys(o.changes).length} |`,
+  `| Phones fixed / invalid | ${o.cs.phones_fixed} / ${o.cs.phones_invalid} |`,`| Emails fixed / invalid | ${o.cs.emails_fixed} / ${o.cs.emails_invalid} |`,
+  `| Names, states, ZIPs, websites fixed | ${o.cs.names_fixed}, ${o.cs.states_fixed}, ${o.cs.zips_fixed}, ${o.cs.websites_fixed} |`,
+  `| Duplicates merged | ${o.merged} |`,`| Ready to import | ${o.pc.ready.length} |`,`| Ready, with a note to fix later | ${o.pc.withNotes} |`,`| Held back for review | ${o.pc.review.length} |`,``,
+  `**TYRQ** = share of all problems the kit fixed on its own versus problems left for a person.`,``,`## Column mapping`,
+  ...(Object.entries(o.changes).map(([k,v])=>`- \`${k}\` → \`${v}\``)), ``,`## Files`, ...o.files.map(f=>`- ${f.name}`)];
+  return L.join("\n")+"\n";
+}
+function table(headers, rows, max=50){
+  const hs=headers.filter(h=>!h.startsWith("_"));
+  return `<table><thead><tr>${hs.map(h=>`<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0,max).map(r=>`<tr>${hs.map(h=>`<td class="${h==="Prep Notes"||h==="Issues"?"note":""}">${escapeHtml(r[h])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+function render(headers,pc,files){
+  $("#results").classList.remove("hidden");
+  const st=$("#status"); st.textContent=pc.status; st.className="status "+pc.status.replace(/\s/g,"");
+  $("#sTyrq").textContent=pc.tyrq; $("#sReady").textContent=pc.ready.length; $("#sFixed").textContent=pc.auto; $("#sReview").textContent=pc.review.length;
+  const dl=$("#downloads"); dl.innerHTML="";
+  const zipBtn=document.createElement("button"); zipBtn.className="btn small"; zipBtn.textContent=`Download all (${files.length} files, .zip)`;
+  zipBtn.onclick=()=>download(`${lastRun.stem}.zip`, makeZip(files)); dl.appendChild(zipBtn);
+  files.forEach(f=>{ const b=document.createElement("button"); b.className="btn small ghost"; b.textContent=f.name+(f.rows!=null?` · ${f.rows.toLocaleString()} rows · ${f.mb.toFixed(1)} MB`:""); b.onclick=()=>download(f.name,f.data,f.type||"text/csv"); dl.appendChild(b); });
+  $("#preview").innerHTML = pc.ready.length ? table(headers,pc.ready) : "<p class='sub' style='padding:10px'>No rows ready yet.</p>";
+  $("#reviewWrap").classList.toggle("hidden",!pc.review.length);
+  if(pc.review.length) $("#reviewTable").innerHTML = table([...headers.filter(h=>h!=="Prep Notes"),"Issues"],pc.review);
+  $("#results").scrollIntoView({behavior:"smooth"});
+}
+
+/* ===================== UI: TEMPLATES ===================== */
+const DEFAULTS={FIRST_NAME:"{{contact.first_name}}",APPOINTMENT_TIME:"{{appointment.start_time}}"};
+let vals={...DEFAULTS}, group="sms";
+function buildVarForm(){
+  const f=$("#varForm"); f.innerHTML="<h2 style='font-size:15px'>Your details</h2>";
+  Object.entries(TEMPLATES.variables).forEach(([k,hint])=>{
+    const id="v_"+k; f.insertAdjacentHTML("beforeend",`<label for="${id}">${k.replace(/_/g," ").toLowerCase()} <span class="chip">[${k}]</span></label><input id="${id}" placeholder="${escapeHtml(hint)}" value="${escapeHtml(vals[k]||"")}">`);
+    f.querySelector("#"+id).oninput=e=>{ vals[k]=e.target.value; renderTpls(); };
+  });
+}
+const fillTpl = t => t.replace(/\[([A-Z0-9_ ]+)\]/g,(m,k)=> (vals[k]||"").trim() ? escapeHtml(vals[k]) : `<span class="v">${m}</span>`);
+const fillPlain = t => t.replace(/\[([A-Z0-9_ ]+)\]/g,(m,k)=> (vals[k]||"").trim() ? vals[k] : m);
+const tplBody = t => t.body ?? t.steps.map((s,i)=>`${i+1}. ${s}`).join("\n");
+function renderTpls(){
+  document.querySelectorAll("[data-g]").forEach(b=>b.classList.toggle("ghost",b.dataset.g!==group));
+  $("#tplList").innerHTML = TEMPLATES.templates[group].map((t,i)=>`<div class="tpl"><div style="display:flex;justify-content:space-between;gap:8px"><h3>${escapeHtml(t.name)}</h3><button class="btn small ghost" data-copy="${i}">Copy</button></div><div class="use">${escapeHtml(t.use)}</div>${t.subject?`<pre><b>Subject:</b> ${fillTpl(escapeHtml(t.subject))}</pre><br>`:""}<pre>${fillTpl(escapeHtml(tplBody(t)))}</pre></div>`).join("");
+  document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{ const t=TEMPLATES.templates[group][b.dataset.copy]; navigator.clipboard?.writeText((t.subject?`Subject: ${fillPlain(t.subject)}\n\n`:"")+fillPlain(tplBody(t))); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1200); });
+}
+document.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{ group=b.dataset.g; renderTpls(); });
+$("#dlTpl").onclick=()=>{
+  const files=[]; Object.entries(TEMPLATES.templates).forEach(([g,items])=>items.forEach(t=>files.push({name:`${g}/${t.id}.txt`, data:`# ${t.name}\n# Use: ${t.use}\n\n`+(t.subject?`Subject: ${fillPlain(t.subject)}\n\n`:"")+fillPlain(tplBody(t))+"\n"})));
+  download("ghl-template-pack.zip", makeZip(files));
+};
+
+/* ===================== TABS ===================== */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  ["prep","tpl","about"].forEach(t=>$("#tab-"+t).classList.toggle("hidden",t!==b.dataset.tab));
+});
+if(TEMPLATES){ buildVarForm(); renderTpls(); }
+window.GHLKit={parseCSV,mapFields,cleanRows,dedupe,stamp,precheck,splitRows,toCSV,makeZip};
+</script>
+</body>
+</html>
