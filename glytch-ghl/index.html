@@ -55,6 +55,7 @@ td.old{color:#ff9fb0;text-decoration:line-through}td.new{color:#9ff59f}
 <header>
   <div class="logo"><b>GLYTCH</b> · GHL COMMAND</div>
   <span class="pill" id="conn">not connected</span>
+  <select id="locSel" class="hidden" style="width:auto;padding:5px 8px" title="Sub-account"></select>
   <nav>
     <button data-tab="queue" class="on">Approvals <span class="badge hidden" id="qCount"></span></button>
     <button data-tab="data">Data</button>
@@ -121,10 +122,10 @@ td.old{color:#ff9fb0;text-decoration:line-through}td.new{color:#9ff59f}
 
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const cfg={ get url(){ try{return sessionStorage.getItem("glytch_url")||"";}catch{return ""} }, get key(){ try{return sessionStorage.getItem("glytch_key")||"";}catch{return ""} } };
+const cfg={ get loc(){ try{return sessionStorage.getItem("glytch_loc")||"";}catch{return ""} }, get url(){ try{return sessionStorage.getItem("glytch_url")||"";}catch{return ""} }, get key(){ try{return sessionStorage.getItem("glytch_key")||"";}catch{return ""} } };
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.remove("hidden"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add("hidden"),3500); }
 async function api(path,{method="GET",body}={}){
-  const r=await fetch((cfg.url||"")+"/api/"+path,{method,headers:{"x-glytch-key":cfg.key,"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
+  const r=await fetch((cfg.url||"")+"/api/"+path,{method,headers:{"x-glytch-key":cfg.key,"content-type":"application/json",...(cfg.loc?{"x-glytch-location":cfg.loc}:{})},body:body?JSON.stringify(body):undefined});
   const j=await r.json().catch(()=>({error:"Bad response"}));
   if(!r.ok) throw Object.assign(new Error(j.error||("HTTP "+r.status)),{status:r.status,data:j});
   return j;
@@ -140,6 +141,8 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{ document.quer
 /* ---------- connection ---------- */
 async function checkStatus(){
   try{ const s=await api("status"); $("#sStatus").textContent=JSON.stringify(s,null,2);
+    const locs=s.config?.locations||[], sel=$("#locSel");
+    if(locs.length>1){ sel.innerHTML=locs.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join(""); sel.value=s.config.currentLocation; sel.classList.remove("hidden"); }
     const c=$("#conn");
     if(s.ghl?.ok){ c.textContent="● "+s.ghl.location; c.className="pill ok"; }
     else if(s.role){ c.textContent="GoHighLevel: "+(s.ghl?.error||"check setup"); c.className="pill bad"; }
@@ -167,16 +170,16 @@ function diffRows(p){
 async function loadQueue(){
   if(!cfg.key) { $("#queue").innerHTML=`<div class="empty">Add your admin key in Settings to connect.</div>`; return; }
   try{
-    const st=$("#qFilter").value; const j=await api("proposals"+(st?"?status="+st:""));
+    const st=$("#qFilter").value, lq=cfg.loc?"location="+encodeURIComponent(cfg.loc):""; const j=await api("proposals?"+[st?"status="+st:"",lq].filter(Boolean).join("&"));
     queue=j.proposals; selected.clear(); updateBulk();
-    const pend=(await api("proposals?status=pending")).proposals.length+(await api("proposals?status=stale")).proposals.length;
+    const pend=(await api("proposals?status=pending"+(lq?"&"+lq:""))).proposals.length+(await api("proposals?status=stale"+(lq?"&"+lq:""))).proposals.length;
     $("#qCount").textContent=pend; $("#qCount").classList.toggle("hidden",!pend);
     $("#queue").innerHTML = queue.length ? queue.map(p=>{
       const open=p.status==="pending"||p.status==="stale";
       return `<div class="card" data-id="${p.id}">
       <div class="prop-head">${open&&!p.destructive?`<input type="checkbox" class="sel" style="width:auto">`:""}
         <h3>${esc(p.label)}: ${esc(name(p.before)||p.targetId||"new contact")}</h3>
-        <span class="tag">${esc(p.source)}</span>
+        <span class="tag">${esc(p.source)}</span>${p.location?`<span class="tag">${esc(p.location)}</span>`:""}
         ${p.destructive?`<span class="tag del">deletes data</span>`:""}
         ${p.status==="stale"?`<span class="tag stale">changed in GoHighLevel since proposed. Review the current values</span>`:""}
         ${!open?`<span class="tag ${p.status}">${p.status}</span>`:""}
@@ -258,6 +261,7 @@ async function loadLog(){
   }catch(e){ $("#logOut").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
 
+$("#locSel").onchange=e=>{ try{ sessionStorage.setItem("glytch_loc",e.target.value); }catch{} checkStatus(); loadQueue(); $("#dataOut").innerHTML=""; $("#editor").classList.add("hidden"); };
 /* ---------- start ---------- */
 try{ $("#sUrl").value=cfg.url; }catch{}
 checkStatus().then(s=>{ if(s?.role) loadQueue(); else { document.querySelector('nav [data-tab="settings"]').click(); } });

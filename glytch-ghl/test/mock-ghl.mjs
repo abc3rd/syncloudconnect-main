@@ -19,15 +19,30 @@ export function startMockGhl(port = 4010) {
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://x"); let body = "";
     for await (const c of req) body += c;
-    const j = body ? JSON.parse(body) : {};
+    let j = {}; try { j = body ? JSON.parse(body) : {}; } catch {}
     const ok = d => { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(d)); };
     const no = (s, m) => { res.writeHead(s, { "Content-Type": "application/json" }); res.end(JSON.stringify({ message: m })); };
-    if (req.headers.authorization !== "Bearer test-pit") return no(401, "Invalid token");
+    const auth = req.headers.authorization || "";
+    // agency-token simulation: agency token can read locations + mint location tokens, nothing else
+    if (auth === "Bearer agency-pit") {
+      db.agencyCalls = (db.agencyCalls || 0) + 1;
+      if (req.method === "GET" && /^\/locations\/[^/]+$/.test(u.pathname)) return ok({ location: { id: u.pathname.split("/")[2], name: "Agency view of " + u.pathname.split("/")[2], companyId: "comp1" } });
+      if (req.method === "POST" && u.pathname === "/oauth/locationToken") {
+        const f = new URLSearchParams(body);
+        if (f.get("companyId") !== "comp1") return no(400, "bad company");
+        return ok({ access_token: "loc-token-" + f.get("locationId"), expires_in: 86399, locationId: f.get("locationId") });
+      }
+      res.writeHead(401, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ statusCode: 401, message: "This authClass type is not allowed to access this scope. Please reach out to the Platform team to get it added." }));
+    }
+    const m2 = auth.match(/^Bearer loc-token-(.+)$/);
+    if (m2) { db.locCalls = db.locCalls || []; db.locCalls.push(m2[1]); }
+    else if (auth !== "Bearer test-pit") return no(401, "Invalid token");
     if (!req.headers.version) return no(400, "Version header required");
     const p = u.pathname, m = req.method;
     let mm;
-    if (m === "GET" && p === "/locations/loc1") return ok({ location: { id: "loc1", name: "SynCloud Test Location" } });
-    if (m === "GET" && p === "/locations/loc1/tags") return ok({ tags: db.tags });
+    if (m === "GET" && /^\/locations\/[^/]+$/.test(p)) return ok({ location: { id: p.split("/")[2], name: p === "/locations/loc1" ? "SynCloud Test Location" : "Location " + p.split("/")[2] } });
+    if (m === "GET" && /^\/locations\/[^/]+\/tags$/.test(p)) return ok({ tags: db.tags });
     if (m === "POST" && p === "/contacts/search") { const s = (j.page - 1) * j.pageLimit; const q = (j.query || "").toLowerCase();
       const list = db.contacts.filter(c => !q || JSON.stringify(c).toLowerCase().includes(q)); return ok({ contacts: list.slice(s, s + j.pageLimit), total: list.length }); }
     if ((mm = p.match(/^\/contacts\/([^/]+)$/))) {

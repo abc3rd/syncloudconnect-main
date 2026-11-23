@@ -16,7 +16,33 @@ import path from "node:path";
 
 export const GHL_BASE = process.env.GHL_BASE_URL || "https://services.leadconnectorhq.com";
 export const GHL_VERSION = process.env.GHL_API_VERSION || "2021-07-28";
-const LOCATION_ID = () => process.env.GHL_LOCATION_ID || "";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// ---------------------------------------------------------------- locations (one or many sub-accounts)
+// GHL_LOCATIONS="scr=Yi87...,omega-ui=ZWn4..."  (or a single GHL_LOCATION_ID)
+export function locations() {
+  const out = {};
+  for (const part of (process.env.GHL_LOCATIONS || "").split(",")) {
+    const [k, v] = part.split("=").map(x => (x || "").trim());
+    if (k && v) out[k] = v;
+  }
+  if (!Object.keys(out).length && process.env.GHL_LOCATION_ID) out.default = process.env.GHL_LOCATION_ID;
+  return out;
+}
+const als = new AsyncLocalStorage();
+export function defaultLocationKey() { return Object.keys(locations())[0] || ""; }
+/** Run fn with a sub-account selected (by key like "scr" or a raw location ID). */
+export function withLocation(keyOrId, fn) {
+  const locs = locations();
+  const key = keyOrId && locs[keyOrId] ? keyOrId : (Object.entries(locs).find(([, v]) => v === keyOrId)?.[0] || defaultLocationKey());
+  return als.run({ key, id: locs[key] || "" }, fn);
+}
+export function locationFromReq(req) {
+  const u = new URL(req.url, "http://x");
+  return req.headers["x-glytch-location"] || u.searchParams.get("loc") || "";
+}
+export const currentLocationKey = () => als.getStore()?.key || defaultLocationKey();
+const LOCATION_ID = () => als.getStore()?.id || locations()[defaultLocationKey()] || "";
 
 // ---------------------------------------------------------------- auth
 function safeEq(a, b) {
@@ -62,8 +88,9 @@ export async function readBody(req) {
 
 export function configStatus() {
   return {
-    ghlToken: !!process.env.GHL_PIT,
-    locationId: !!LOCATION_ID(),
+    ghlToken: !!process.env.GHL_PIT || Object.keys(process.env).some(k => k.startsWith("GHL_PIT_")),
+    locations: Object.keys(locations()),
+    currentLocation: currentLocationKey(),
     adminKey: !!process.env.GLYTCH_ADMIN_KEY,
     agentKey: !!process.env.GLYTCH_AGENT_KEY,
     storage: process.env.UPSTASH_REDIS_REST_URL ? "upstash" : process.env.GLYTCH_DATA_DIR ? "disk (" + process.env.GLYTCH_DATA_DIR + ")" : "memory (not saved between runs)",
@@ -73,9 +100,21 @@ export function configStatus() {
 
 // ---------------------------------------------------------------- GoHighLevel client
 let lastCall = 0;
-export async function ghl(method, path, { query, body } = {}) {
-  if (!process.env.GHL_PIT) throw new Error("GHL_PIT is not set on the server.");
-  // gentle pacing: at most ~8 calls per second from one function run
+// Which token to use for a location:
+//   GHL_PIT_<KEY> (e.g. GHL_PIT_SCR): a sub-account token for that location, used as-is
+//   otherwise GHL_PIT: tried as-is; if GoHighLevel says it's the wrong token type (agency token),
+//   it's exchanged for a short-lived location token via /oauth/locationToken and cached.
+const tokenMode = {};            // locationId -> "direct" | "exchange"
+const locTokens = {};            // locationId -> { token, exp }
+const companyIds = {};           // locationId -> companyId
+const exchangeFailed = {};       // locationId -> reason the exchange was refused
+
+function baseToken() {
+  const k = currentLocationKey().toUpperCase().replace(/[^A-Z0-9]/g, "_");
+  return process.env["GHL_PIT_" + k] || process.env.GHL_PIT || "";
+}
+
+async function rawCall(token, method, path, { query, body, form } = {}) {
   const wait = lastCall + 125 - Date.now();
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastCall = Date.now();
@@ -84,21 +123,80 @@ export async function ghl(method, path, { query, body } = {}) {
   const r = await fetch(url, {
     method,
     headers: {
-      Authorization: `Bearer ${process.env.GHL_PIT}`,
-      Version: GHL_VERSION,
-      Accept: "application/json",
+      Authorization: `Bearer ${token}`, Version: GHL_VERSION, Accept: "application/json",
       ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(form ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : form ? new URLSearchParams(form).toString() : undefined,
   });
   const text = await r.text();
   let data; try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
   if (!r.ok) {
-    const err = new Error(`GoHighLevel ${r.status}: ${data.message || data.error || text.slice(0, 200)}`);
+    const msg = Array.isArray(data.message) ? data.message.join("; ") : (data.message || data.error || text.slice(0, 200));
+    const err = new Error(`GoHighLevel ${r.status}: ${msg}`);
     err.status = r.status; err.data = data;
     throw err;
   }
   return data;
+}
+
+async function locationToken(locationId) {
+  const cached = locTokens[locationId];
+  if (cached && cached.exp > Date.now() + 60_000) return cached.token;
+  const agency = baseToken();
+  let companyId = process.env.GHL_COMPANY_ID || companyIds[locationId];
+  if (!companyId) {
+    const l = await rawCall(agency, "GET", `/locations/${locationId}`);
+    companyId = companyIds[locationId] = l.location?.companyId || l.companyId;
+    if (!companyId) throw new Error("Couldn't find the agency (company) ID for this location. Set GHL_COMPANY_ID.");
+  }
+  const t = await rawCall(agency, "POST", "/oauth/locationToken", { form: { companyId, locationId } });
+  if (!t.access_token) throw new Error("GoHighLevel didn't return a location token.");
+  locTokens[locationId] = { token: t.access_token, exp: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+  return t.access_token;
+}
+
+const wrongTokenType = e => (e.status === 401 || e.status === 403) &&
+  /authclass|not authorized for this scope|token.*(type|location)|location.*access|agency/i.test(JSON.stringify(e.data || e.message));
+
+export async function ghl(method, path, opts = {}) {
+  const token = baseToken();
+  if (!token) throw new Error("GHL_PIT is not set on the server.");
+  const loc = LOCATION_ID();
+  if (tokenMode[loc] === "exchange") return rawCall(await locationToken(loc), method, path, opts);
+  try {
+    const d = await rawCall(token, method, path, opts);
+    tokenMode[loc] ||= "direct";
+    return d;
+  } catch (e) {
+    // an agency token can read some location info but not contacts etc.: on a token-type
+    // refusal, switch this location to exchanged location tokens (unless that already failed)
+    if (!wrongTokenType(e) || exchangeFailed[loc]) throw e;
+    let lt;
+    try { lt = await locationToken(loc); }
+    catch (e2) {
+      exchangeFailed[loc] = e2.message;
+      throw new Error(`${e.message}. Tried exchanging the agency token for a location token: ${e2.message}`);
+    }
+    tokenMode[loc] = "exchange";
+    return rawCall(lt, method, path, opts);
+  }
+}
+
+/** Startup self-test: what this token can do, per location. Logs no secrets. */
+export async function selfTest() {
+  const out = {};
+  for (const [key, id] of Object.entries(locations())) {
+    out[key] = await withLocation(key, async () => {
+      const r = { locationId: id };
+      try { const l = await READS.location(); r.location = l.location?.name || l.name || "ok"; } catch (e) { r.location = "✗ " + e.message; }
+      try { const c = await READS["contacts.search"]({ limit: 1 }); r.contacts = `ok (${c.total ?? (c.contacts || []).length} total)`; } catch (e) { r.contacts = "✗ " + e.message; }
+      r.tokenMode = tokenMode[id] || "unknown";
+      if (exchangeFailed[id]) r.exchange = "✗ " + exchangeFailed[id];
+      return r;
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- read operations (run immediately)
@@ -250,7 +348,8 @@ export async function createProposal({ op, targetId = null, payload = {}, reason
   if (!def) throw Object.assign(new Error(`Unknown edit "${op}". Allowed: ${Object.keys(EDITS).join(", ")}`), { status: 400 });
   if (op !== "contact.create" && !targetId) throw Object.assign(new Error("targetId is required."), { status: 400 });
   // one pending proposal per op+target+payload: jobs can rerun without piling up duplicates
-  const dedupeKey = crypto.createHash("sha1").update(`${op}|${targetId}|${JSON.stringify(payload)}`).digest("hex").slice(0, 16);
+  const location = currentLocationKey();
+  const dedupeKey = crypto.createHash("sha1").update(`${location}|${op}|${targetId}|${JSON.stringify(payload)}`).digest("hex").slice(0, 16);
   const existing = (await store.all()).find(x => x.dedupeKey === dedupeKey && x.status === "pending");
   if (existing) return { proposal: existing, duplicate: true };
   // jobs pass the record they just read, saving one GoHighLevel call per proposal
@@ -258,17 +357,22 @@ export async function createProposal({ op, targetId = null, payload = {}, reason
   if (op !== "contact.create" && !before) throw Object.assign(new Error(`Record ${targetId} not found.`), { status: 404 });
   const p = {
     id: "p_" + crypto.randomBytes(6).toString("hex"),
-    op, label: def.label, destructive: def.destructive,
+    op, label: def.label, destructive: def.destructive, location,
     targetId, payload, reason, source, dedupeKey,
     before, fingerprint: fingerprint(before),
     status: "pending", createdAt: new Date().toISOString(),
   };
   await store.put(p);
-  await store.log({ event: "proposed", id: p.id, op, targetId, source, reason });
+  await store.log({ event: "proposed", id: p.id, op, targetId, source, reason, location });
   return { proposal: p, duplicate: false };
 }
 
-export async function decide(id, decision, { confirmText = "", force = false, decidedBy = "admin" } = {}) {
+export async function decide(id, decision, opts = {}) {
+  const p0 = await store.get(id);
+  if (!p0) throw Object.assign(new Error("Proposal not found."), { status: 404 });
+  return withLocation(p0.location, () => decideIn(id, decision, opts));
+}
+async function decideIn(id, decision, { confirmText = "", force = false, decidedBy = "admin" } = {}) {
   const p = await store.get(id);
   if (!p) throw Object.assign(new Error("Proposal not found."), { status: 404 });
   if (!["pending", "stale"].includes(p.status)) throw Object.assign(new Error(`Already ${p.status}.`), { status: 409 });

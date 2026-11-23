@@ -5,6 +5,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withLocation, locationFromReq, locations, selfTest } from "./api/_lib.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT) || 3000;
@@ -22,7 +23,7 @@ const server = http.createServer(async (req, res) => {
   if (u.pathname.startsWith("/api/")) {
     const h = handlers[u.pathname.slice(5).replace(/\/$/, "")];
     if (!h) { res.writeHead(404, { "Content-Type": "application/json" }); return res.end('{"error":"Not found"}'); }
-    try { await h(req, res); } catch (e) { if (!res.headersSent) res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
+    try { await withLocation(locationFromReq(req), () => h(req, res)); } catch (e) { if (!res.headersSent) res.writeHead(500); res.end(JSON.stringify({ error: e.message })); }
     return;
   }
   if (u.pathname === "/" || u.pathname === "/index.html") {
@@ -31,7 +32,13 @@ const server = http.createServer(async (req, res) => {
   }
   res.writeHead(404); res.end("Not found");
 });
-server.listen(port, () => console.log(`GLYTCH bridge on :${port}`));
+server.listen(port, async () => {
+  console.log(`GLYTCH bridge on :${port}; locations: ${Object.keys(locations()).join(", ") || "none set"}`);
+  if (process.env.GHL_PIT || Object.keys(process.env).some(k => k.startsWith("GHL_PIT_"))) {
+    try { console.log("GoHighLevel self-test:", JSON.stringify(await selfTest())); }
+    catch (e) { console.log("GoHighLevel self-test failed:", e.message); }
+  }
+});
 
 // Daily job run at 13:17 UTC (≈ 8:17 AM Eastern): proposals only
 if (process.env.CRON_SECRET) {
@@ -40,10 +47,12 @@ if (process.env.CRON_SECRET) {
     const d = new Date(), day = d.toISOString().slice(0, 10);
     if (d.getUTCHours() === 13 && d.getUTCMinutes() >= 17 && lastDay !== day && process.env.GHL_PIT) {
       lastDay = day;
-      try {
-        const r = await fetch(`http://127.0.0.1:${port}/api/jobs`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
-        console.log("daily jobs:", r.status, (await r.text()).slice(0, 300));
-      } catch (e) { console.log("daily jobs failed:", e.message); }
+      for (const loc of Object.keys(locations())) {
+        try {
+          const r = await fetch(`http://127.0.0.1:${port}/api/jobs`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}`, "x-glytch-location": loc } });
+          console.log(`daily jobs [${loc}]:`, r.status, (await r.text()).slice(0, 300));
+        } catch (e) { console.log(`daily jobs [${loc}] failed:`, e.message); }
+      }
     }
   }, 60_000);
 }

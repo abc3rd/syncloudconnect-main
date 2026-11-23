@@ -7,9 +7,10 @@ export default async function handler(req, res) {
   if (!role) return;
   try {
     if (req.method === "GET") {
-      const status = new URL(req.url, "http://x").searchParams.get("status");
+      const u = new URL(req.url, "http://x"), status = u.searchParams.get("status"), loc = u.searchParams.get("location");
       let list = await store.all();
       if (status) list = list.filter(p => p.status === status);
+      if (loc) list = list.filter(p => (p.location || "") === loc);
       list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       return send(res, 200, { proposals: list, edits: Object.fromEntries(Object.entries(EDITS).map(([k, v]) => [k, { label: v.label, destructive: v.destructive }])) });
     }

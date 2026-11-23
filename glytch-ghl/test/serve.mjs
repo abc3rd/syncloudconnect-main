@@ -11,7 +11,8 @@ export function startBridge(port = 4020) {
       const name = u.pathname.slice(5).replace(/[^a-z-]/g, "");
       const file = path.join(root, "api", name + ".js");
       if (!fs.existsSync(file)) { res.writeHead(404); return res.end("{}"); }
-      try { (await import(file)).default(req, res); } catch (e) { res.writeHead(500); res.end(String(e)); }
+      const lib = await import(path.join(root, "api", "_lib.js"));
+      try { await lib.withLocation(lib.locationFromReq(req), () => import(file).then(m => m.default(req, res))); } catch (e) { res.writeHead(500); res.end(String(e)); }
       return;
     }
     const f = path.join(root, u.pathname === "/" ? "index.html" : u.pathname);

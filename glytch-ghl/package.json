@@ -9,6 +9,6 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test/run.mjs"
+    "test": "node test/run.mjs && node test/run-agency.mjs"
   }
 }
