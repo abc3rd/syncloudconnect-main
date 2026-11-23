@@ -1,0 +1,140 @@
+{
+  "pack": "GHL Fill-in-the-Blank Pack by SynCloud Connect",
+  "version": "1.0.0",
+  "variables": {
+    "BUSINESS_NAME": "Your business name as customers know it",
+    "OWNER_NAME": "Name that signs the messages",
+    "FIRST_NAME": "Leave as {{contact.first_name}} to let GoHighLevel fill it per contact",
+    "SERVICE": "What you do, in the customer's words (e.g. AC repair)",
+    "OFFER": "The specific offer (e.g. $49 tune-up)",
+    "DEADLINE": "When the offer ends (e.g. Friday at 5pm)",
+    "BOOKING_LINK": "Your calendar or booking link",
+    "REVIEW_LINK": "Direct link to your Google review form",
+    "PHONE": "Business phone number",
+    "APPOINTMENT_TIME": "Leave as {{appointment.start_time}} in GoHighLevel",
+    "CITY": "City or service area",
+    "DAYS_SINCE": "How long since the last visit (e.g. 6 months)"
+  },
+  "templates": {
+    "sms": [
+      {
+        "id": "sms-missed-call-text-back",
+        "name": "Missed-call text back",
+        "use": "Fires within 1 minute of a missed call so the lead doesn't call the next business on the list.",
+        "body": "Hi, this is [OWNER_NAME] with [BUSINESS_NAME]. Sorry I missed your call! I'm on a job right now. What can I help you with? You can also grab a time here: [BOOKING_LINK]"
+      },
+      {
+        "id": "sms-speed-to-lead",
+        "name": "New lead: first touch",
+        "use": "Sent the moment a form or ad lead comes in.",
+        "body": "Hi [FIRST_NAME], [OWNER_NAME] from [BUSINESS_NAME] here. Got your request about [SERVICE]. Is now a good time for a quick call, or would you rather pick a time? [BOOKING_LINK]"
+      },
+      {
+        "id": "sms-appointment-reminder",
+        "name": "Appointment reminder",
+        "use": "24 hours and 2 hours before the appointment.",
+        "body": "Hi [FIRST_NAME], quick reminder: [BUSINESS_NAME] is scheduled for [APPOINTMENT_TIME]. Reply C to confirm or R to reschedule."
+      },
+      {
+        "id": "sms-review-request",
+        "name": "Review request",
+        "use": "2 hours after a job is marked complete.",
+        "body": "Thanks for choosing [BUSINESS_NAME], [FIRST_NAME]! If we did a good job, would you mind leaving a quick review? It takes 30 seconds and helps a small business a lot: [REVIEW_LINK]"
+      },
+      {
+        "id": "sms-reactivation",
+        "name": "Win-back / reactivation",
+        "use": "Customers with no visit in [DAYS_SINCE]. Acknowledge the gap; don't pitch hard.",
+        "body": "Hi [FIRST_NAME], it's [OWNER_NAME] at [BUSINESS_NAME]. It's been about [DAYS_SINCE] and I wanted to check in. If you need anything, we're holding [OFFER] for past customers until [DEADLINE]. Just reply here."
+      },
+      {
+        "id": "sms-offer-deadline",
+        "name": "Offer with a deadline",
+        "use": "Short promo blast to an opted-in list.",
+        "body": "[BUSINESS_NAME]: [OFFER] for [CITY] customers, ends [DEADLINE]. Book here: [BOOKING_LINK]. Reply STOP to opt out."
+      }
+    ],
+    "email": [
+      {
+        "id": "email-welcome",
+        "name": "Welcome / what happens next",
+        "use": "Right after a new lead or customer signs up.",
+        "subject": "Welcome to [BUSINESS_NAME], [FIRST_NAME]",
+        "body": "Hi [FIRST_NAME],\n\nThanks for reaching out to [BUSINESS_NAME]. Here's what happens next:\n\n1. We'll review what you need for [SERVICE].\n2. You'll hear from me within one business day.\n3. If you'd rather not wait, pick a time that works for you: [BOOKING_LINK]\n\nTalk soon,\n[OWNER_NAME]\n[BUSINESS_NAME] | [PHONE]"
+      },
+      {
+        "id": "email-quote-follow-up",
+        "name": "Quote follow-up",
+        "use": "3 days after sending a quote with no reply.",
+        "subject": "Any questions on your [SERVICE] quote?",
+        "body": "Hi [FIRST_NAME],\n\nI wanted to make sure the quote for [SERVICE] came through and made sense. If anything's unclear or you'd like to adjust the scope, just reply and I'll sort it out.\n\nIf you're ready to go, you can lock in a date here: [BOOKING_LINK]\n\n[OWNER_NAME]\n[BUSINESS_NAME]"
+      },
+      {
+        "id": "email-reactivation",
+        "name": "We miss you",
+        "use": "Past customers with no activity in [DAYS_SINCE].",
+        "subject": "[FIRST_NAME], it's been a while",
+        "body": "Hi [FIRST_NAME],\n\nIt's been about [DAYS_SINCE] since we last saw you at [BUSINESS_NAME], and I wanted to say thanks for being a customer.\n\nIf there's anything you need, we're offering [OFFER] to past customers through [DEADLINE].\n\nReply to this email or book here: [BOOKING_LINK]\n\n[OWNER_NAME]"
+      },
+      {
+        "id": "email-review-request",
+        "name": "Review request (email)",
+        "use": "Backup to the SMS review request, sent the next day if no review.",
+        "subject": "How did we do, [FIRST_NAME]?",
+        "body": "Hi [FIRST_NAME],\n\nThanks again for trusting [BUSINESS_NAME] with your [SERVICE]. If you have 30 seconds, a review helps other people in [CITY] find us:\n\n[REVIEW_LINK]\n\nIf anything wasn't right, reply here and I'll make it right.\n\n[OWNER_NAME]"
+      }
+    ],
+    "workflows": [
+      {
+        "id": "workflow-missed-call-text-back",
+        "name": "Missed-call text back (GHL workflow blueprint)",
+        "use": "Build this in Automation > Workflows.",
+        "steps": [
+          "Trigger: Call Status = missed / no answer (inbound).",
+          "Wait: 1 minute.",
+          "Action: Send SMS using 'sms-missed-call-text-back'.",
+          "Condition: Contact replied within 30 minutes? If yes: notify [OWNER_NAME] and stop.",
+          "If no: Wait 1 day, send 'sms-speed-to-lead'.",
+          "Action: Add tag 'missed-call'; create opportunity in pipeline stage 'New Lead'."
+        ]
+      },
+      {
+        "id": "workflow-new-lead",
+        "name": "New lead nurture (GHL workflow blueprint)",
+        "use": "For form, ad and imported leads tagged by the Data Prep Kit.",
+        "steps": [
+          "Trigger: Contact Tag added = your import tag (set with --tags in the Data Prep Kit).",
+          "Action: Send 'sms-speed-to-lead' immediately (business hours only).",
+          "Action: Send 'email-welcome'.",
+          "Wait: 2 days. If no booking: send 'email-quote-follow-up' or a second SMS.",
+          "Wait: 5 days. If still no reply: add tag 'cold' and move to the long-term nurture list.",
+          "Goal: Appointment booked > remove from workflow."
+        ]
+      },
+      {
+        "id": "workflow-review-engine",
+        "name": "Review engine (GHL workflow blueprint)",
+        "use": "Turns every completed job into a review request.",
+        "steps": [
+          "Trigger: Opportunity moved to 'Won' or appointment status 'Showed'.",
+          "Wait: 2 hours.",
+          "Action: Send 'sms-review-request'.",
+          "Wait: 1 day. Condition: review left? If no: send 'email-review-request'.",
+          "Action: Add tag 'review-asked' so nobody gets asked twice."
+        ]
+      },
+      {
+        "id": "workflow-reactivation",
+        "name": "Reactivation campaign (GHL workflow blueprint)",
+        "use": "Run monthly on customers with no activity in [DAYS_SINCE].",
+        "steps": [
+          "Trigger: Smart list of customers with last appointment older than [DAYS_SINCE] (or import that list with tag 'reactivate').",
+          "Action: Send 'sms-reactivation'.",
+          "Wait: 3 days. If no reply: send 'email-reactivation'.",
+          "Condition: replied or booked? Notify [OWNER_NAME] and remove tag 'reactivate'.",
+          "If no response after 14 days: add tag 'dormant' and stop."
+        ]
+      }
+    ]
+  }
+}
