@@ -1,0 +1,9 @@
+{
+  "name": "glytch-telegram-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram gateway for Cowboy, GLYTCH and Pablo: three sovereign bots, Open WebUI brain with Claude/Gemini fallback. Omega UI, LLC / SynCloud Connect.",
+  "scripts": { "start": "node server.mjs", "test": "node test/run.mjs" },
+  "engines": { "node": ">=18" }
+}
