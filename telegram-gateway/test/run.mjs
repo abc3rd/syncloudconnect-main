@@ -68,7 +68,7 @@ const run = (cwd, env, ready) => new Promise((ok, no) => {
 await run(bridgeDir, { PORT: "4044", GHL_BASE_URL: "http://127.0.0.1:4043", GHL_PIT: "test-pit", GHL_LOCATIONS: "scr=loc1,omega-ui=loc2", GLYTCH_ADMIN_KEY: "adm", GLYTCH_AGENT_KEY: "agt", GLYTCH_DATA_DIR: "/tmp/gw-bridge-" + Date.now() }, / on :\d+/);
 const dataDir = "/tmp/gw-data-" + Date.now();
 const gwOut = await run(path.resolve(here, ".."), {
-  PORT: "4045", TELEGRAM_API_BASE: "http://127.0.0.1:4041", OPENWEBUI_URL: "http://127.0.0.1:4042", BRIDGE_URL: "http://127.0.0.1:4044", BRIDGE_AGENT_KEY: "agt", DATA_DIR: dataDir,
+  PORT: "4045", TELEGRAM_API_BASE: "http://127.0.0.1:4041", OPENWEBUI_URL: "http://127.0.0.1:4042", BRIDGE_URL: "http://127.0.0.1:4044", BRIDGE_AGENT_KEY: "agt", DATA_DIR: dataDir, SITE_AUDIT: "off",
   OWUI_ADMIN_EMAIL: "owner@example.com", OWUI_ADMIN_PASSWORD: "pw-123456789",
   COWBOY_BOT_TOKEN: "cowboy:AAA", COWBOY_PAIR_CODE: "COW-1111", GLYTCH_BOT_TOKEN: "glytch:BBB", GLYTCH_PAIR_CODE: "GLY-2222", PABLO_BOT_TOKEN: "pablo:CCC", PABLO_PAIR_CODE: "PAB-3333",
 }, /pablo\] @pablo_bot online/);
@@ -117,6 +117,29 @@ n = count(G, 700); say(G, 700, "/scan format"); r = await waitReply(G, 700, n);
 t("GLYTCH runs a scan (propose only)", /proposed 2/.test(r) && /Portal/.test(r), r);
 n = count(G, 700); say(G, 700, "/pending"); r = await waitReply(G, 700, n);
 t("GLYTCH lists pending approvals", /2 waiting/.test(r), r);
+n = count(G, 700); say(G, 700, "/sites legendary"); r = await waitReply(G, 700, n);
+t("GLYTCH lists a brand's pages", /legendaryleads\.online/.test(r) && !/glytch\.cloud\//.test(r), r.slice(0, 200));
+n = count(G, 700); say(G, 700, "/audit"); r = await waitReply(G, 700, n);
+t("GLYTCH /audit before any run says so", /No audit yet/.test(r), r);
+n = count(C, 501); say(C, 501, "/sites"); r = await waitReply(C, 501, n);
+t("SOVEREIGN: Cowboy has no site commands (goes to AI)", r.startsWith("[cowboy]"), r);
+
+// site audit engine against a local server: ok, redirect, 404, down
+const { auditSites, summarize } = await import("../sites.mjs");
+const sSrv = http.createServer((q, s2) => {
+  if (q.url === "/ok") { s2.writeHead(200, { "content-type": "text/html" }); return s2.end("<title>Home</title>"); }
+  if (q.url === "/move") { s2.writeHead(301, { location: "/ok" }); return s2.end(); }
+  if (q.url === "/soft404") { s2.writeHead(200, { "content-type": "text/html" }); return s2.end("<title>Page not found</title>"); }
+  s2.writeHead(404); s2.end();
+});
+await new Promise(r2 => sSrv.listen(4047, r2));
+const B = "http://127.0.0.1:4047";
+const a = await auditSites([{ url: B + "/ok" }, { url: B + "/move" }, { url: B + "/gone" }, { url: B + "/soft404" }, { url: "http://127.0.0.1:4999/x" }]);
+const v = a.results.map(x => x.verdict).join(",");
+t("audit classifies ok / redirect / 404 / soft-404 / down", v === "ok,redirects,broken,broken,down", v);
+t("audit follows redirects to the final page", a.results[1].final === B + "/ok" && a.results[1].title === "Home");
+t("audit summary counts", JSON.stringify(summarize(a)) === JSON.stringify({ ok: 1, redirects: 1, broken: 2, down: 1 }));
+sSrv.close();
 n = count(G, 700); say(G, 700, "/reset"); r = await waitReply(G, 700, n); t("/reset clears history", /Fresh start/.test(r));
 
 // fallback when Open WebUI fails and no direct keys: graceful message
@@ -133,7 +156,7 @@ t("long reply split into Telegram-sized parts", longParts.length >= 2 && longPar
 
 // restart keeps pairings
 procs[1].kill(); await wait(300);
-const gw2 = await run(path.resolve(here, ".."), { PORT: "4046", TELEGRAM_API_BASE: "http://127.0.0.1:4041", OPENWEBUI_URL: "http://127.0.0.1:4042", BRIDGE_URL: "http://127.0.0.1:4044", BRIDGE_AGENT_KEY: "agt", DATA_DIR: dataDir, OWUI_ADMIN_EMAIL: "owner@example.com", OWUI_ADMIN_PASSWORD: "pw-123456789", COWBOY_BOT_TOKEN: "cowboy:AAA", COWBOY_PAIR_CODE: "COW-1111" }, /cowboy\] @cowboy_bot online/);
+const gw2 = await run(path.resolve(here, ".."), { PORT: "4046", TELEGRAM_API_BASE: "http://127.0.0.1:4041", OPENWEBUI_URL: "http://127.0.0.1:4042", BRIDGE_URL: "http://127.0.0.1:4044", BRIDGE_AGENT_KEY: "agt", DATA_DIR: dataDir, SITE_AUDIT: "off", OWUI_ADMIN_EMAIL: "owner@example.com", OWUI_ADMIN_PASSWORD: "pw-123456789", COWBOY_BOT_TOKEN: "cowboy:AAA", COWBOY_PAIR_CODE: "COW-1111" }, /cowboy\] @cowboy_bot online/);
 n = count(C, 501); say(C, 501, "still there?"); r = await waitReply(C, 501, n);
 t("pairing and history survive a restart", r.startsWith("[cowboy]"), r);
 t("restart reuses the admin account (no second sign-up)", ow.users.length === 1);

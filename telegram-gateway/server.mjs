@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { PERSONAS } from "./personas.mjs";
+import { SITES, auditSites, summarize } from "./sites.mjs";
 
 const TG = (process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/$/, "");
 const OWUI = (process.env.OPENWEBUI_URL || "").replace(/\/$/, "");
@@ -152,8 +153,34 @@ async function bridge(p, opts = {}) {
   return j;
 }
 const nameOf = c => [c.firstName, c.lastName].filter(Boolean).join(" ") || c.contactName || c.email || c.phone || c.id;
+// ---------------------------------------------------------------- site inventory + uptime audit
+const AUDIT_FILE = path.join(DATA, "site-audit.json");
+let lastAudit = (() => { try { return JSON.parse(fs.readFileSync(AUDIT_FILE, "utf8")); } catch { return null; } })();
+async function runAudit() {
+  const a = await auditSites();
+  lastAudit = a; fs.writeFileSync(AUDIT_FILE, JSON.stringify(a));
+  log("SITE_AUDIT summary", JSON.stringify(summarize(a)));
+  for (const r of a.results) log(`SITE_AUDIT ${r.verdict} ${r.status} ${r.ms ?? ""}ms ${r.url}${r.final !== r.url ? " -> " + r.final : ""}${r.error ? " err=" + r.error : ""} | ${r.title || ""}`);
+  return a;
+}
+function sitesText(arg) {
+  const q = (arg || "").toLowerCase();
+  const list = SITES.filter(s => !q || s.brand.toLowerCase().includes(q) || s.host.includes(q));
+  if (!list.length) return `No sites match "${arg}". Brands: ${[...new Set(SITES.map(s => s.brand))].join(", ")}`;
+  const byUrl = Object.fromEntries((lastAudit?.results || []).map(r => [r.url, r.verdict]));
+  const mark = { ok: "✅", redirects: "↪️", broken: "❌", down: "⛔" };
+  return `${list.length} pages${q ? ` for "${arg}"` : ""}:\n` + list.slice(0, 60).map(s => `${mark[byUrl[s.url]] || "•"} ${s.url}`).join("\n") + (list.length > 60 ? `\n…and ${list.length - 60} more` : "");
+}
+function auditText(a) {
+  if (!a) return "No audit yet. Send /audit run.";
+  const c = summarize(a); const bad = a.results.filter(r => r.verdict === "broken" || r.verdict === "down");
+  return `Site audit ${a.at.slice(0, 16).replace("T", " ")} UTC: ✅ ${c.ok} ok · ↪️ ${c.redirects} redirect · ❌ ${c.broken} broken · ⛔ ${c.down} down` + (bad.length ? "\nNeeds attention:\n" + bad.slice(0, 40).map(r => `• ${r.url} (${r.error || r.status})`).join("\n") : "\nEverything answers.");
+}
+
 async function glytchCommand(cmd, arg, chatState) {
   const loc = chatState.loc || "";
+  if (cmd === "/sites") return sitesText(arg);
+  if (cmd === "/audit") return auditText(arg === "run" ? await runAudit() : lastAudit);
   if (cmd === "/loc") {
     const s = await bridge("status");
     const locs = s.config?.locations || [];
@@ -207,7 +234,7 @@ async function handle(bot, msg) {
     if ((st.pairFails[uid] || 0) >= 5) return reply(bot.token, chatId, "Too many wrong codes.");
     st.allowed.push(uid); saveState(bot.key, st);
     log(`[${bot.key}] paired user ${uid} (${msg.from?.username || msg.from?.first_name || ""})`);
-    return reply(bot.token, chatId, `Connected. I'm ${bot.persona.name}. Ask me anything.${bot.key === "glytch" ? "\nCommands: /pending, /contacts <search>, /scan [format|duplicates|stale-opps|tag-hygiene], /loc [scr|omega-ui], /reset" : "\n/reset starts a fresh conversation."}`);
+    return reply(bot.token, chatId, `Connected. I'm ${bot.persona.name}. Ask me anything.${bot.key === "glytch" ? "\nCommands: /sites [brand], /audit [run], /pending, /contacts <search>, /scan [format|duplicates|stale-opps|tag-hygiene], /loc [scr|omega-ui], /reset" : "\n/reset starts a fresh conversation."}`);
   }
   if (!allowed) return reply(bot.token, chatId, "This assistant is private. Send /pair <code> to connect.");
 
@@ -261,5 +288,9 @@ http.createServer((req, res) => {
     if (!boot.ok) log("Open WebUI bootstrap failed:", boot.reason);
   }
   if (process.env.SELFTEST_ONLY === "1") return;
+  if (process.env.SITE_AUDIT !== "off") {
+    setTimeout(() => runAudit().catch(e => log("SITE_AUDIT failed:", e.message)), 15000);
+    setInterval(() => runAudit().catch(e => log("SITE_AUDIT failed:", e.message)), 24 * 3600 * 1000);
+  }
   bots.forEach(b => runBot(b));
 });
