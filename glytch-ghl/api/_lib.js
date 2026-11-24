@@ -109,6 +109,10 @@ const locTokens = {};            // locationId -> { token, exp }
 const companyIds = {};           // locationId -> companyId
 const exchangeFailed = {};       // locationId -> reason the exchange was refused
 
+export function resetTokenCache() {
+  for (const m of [tokenMode, locTokens, exchangeFailed]) for (const k of Object.keys(m)) delete m[k];
+}
+
 function baseToken() {
   const k = currentLocationKey().toUpperCase().replace(/[^A-Z0-9]/g, "_");
   return process.env["GHL_PIT_" + k] || process.env.GHL_PIT || "";

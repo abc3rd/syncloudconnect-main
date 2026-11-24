@@ -54,6 +54,10 @@ th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}th{col
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1b1b26;border:1px solid var(--mag);padding:10px 18px;border-radius:10px;z-index:99;max-width:90vw}
 @media(max-width:760px){.stat{gap:6px}.stat div{min-width:0;padding:6px}.stat b{font-size:16px}.stat span{font-size:10px;line-height:1.1;display:block}}
 .secret{font:14px 'Share Tech Mono';background:#0e0e15;border:1px dashed var(--mag);padding:6px 10px;border-radius:8px;user-select:all}
+.keyrow{display:grid;grid-template-columns:minmax(150px,1fr) 2fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.keyrow .h{font-size:12px;color:var(--sil);opacity:.8;margin-top:2px}.keygrp{margin:12px 0 2px;font:12px 'Share Tech Mono';color:var(--mag);letter-spacing:.08em;text-transform:uppercase}
+.keyok{color:#3ddc97;font-size:12px}.keyno{color:var(--warn);font-size:12px}
+@media(max-width:700px){.keyrow{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -138,6 +142,10 @@ th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}th{col
           <select id="tRole" style="width:auto"><option value="viewer">Viewer: sees data</option><option value="staff">Staff: proposes changes, runs scans</option><option value="admin">Admin: approves changes</option></select>
           <button class="small" id="tAdd">Add person</button>
         </div><div id="tOut" style="margin-top:8px"></div></div></div></div>
+
+    <div class="grid-stack-item" gs-id="keys" gs-x="0" gs-y="17" gs-w="12" gs-h="8" gs-min-w="5" gs-min-h="4" data-role="owner"><div class="grid-stack-item-content">
+      <div class="wh"><h3>Keys &amp; connections</h3><span class="mono">owner only · encrypted</span></div>
+      <div class="wb"><p class="sub" style="margin-top:0">Paste a key and press Save. It's checked, stored encrypted, and the bots and bridge pick it up within a minute. Saved keys are never shown again, only their last 4 characters.</p><div id="wKeys"></div></div></div></div>
   </div>
 </main>
 </div>
@@ -154,7 +162,7 @@ async function api(path,{method="GET",body}={}){
   const j=await r.json().catch(()=>({error:"Bad response"}));
   if(r.status===401&&path!=="login"){ show("login"); throw new Error("Please log in."); }
   if(r.status===428){ show("pass"); throw new Error(j.error); }
-  if(!r.ok) throw Object.assign(new Error(j.error||("HTTP "+r.status)),{status:r.status});
+  if(!r.ok) throw Object.assign(new Error(j.error||("HTTP "+r.status)),{status:r.status,data:j});
   return j;
 }
 const B=p=>api("bridge/"+p);
@@ -249,6 +257,25 @@ async function loadActivity(){
     el.innerHTML=rows.length?`<table><tbody>${rows.map(r=>`<tr><td class="mono">${when(r.at)}</td><td>${esc(r.what)}</td><td class="mono">${esc(r.who)} ${esc(r.d)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No activity yet.</div>`;
   }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
+async function loadKeys(){
+  const el=$("#wKeys"); if(!el) return;
+  try{ const {keys}=await api("keys"); let g="";
+    el.innerHTML=keys.map(k=>{ const head=k.group!==g?`<div class="keygrp">${esc(g=k.group)}</div>`:"";
+      return head+`<div class="keyrow" data-k="${esc(k.name)}"><div><b>${esc(k.label)}</b><div class="h">${esc(k.help)}</div>${k.set?`<div class="keyok">✓ set ··${esc(k.last4)}${k.note?" · "+esc(k.note):""}</div>`:`<div class="keyno">not set</div>`}</div>
+        <input type="password" autocomplete="off" spellcheck="false" placeholder="${k.set?"replace…":"paste here"}">
+        <div class="row"><button class="small" data-act="save">Save</button>${k.set?`<button class="ghost small" data-act="del">Remove</button>`:""}</div></div>`; }).join("");
+    el.querySelectorAll(".keyrow button").forEach(b=>b.onclick=async()=>{ const row=b.closest(".keyrow"), name=row.dataset.k, inp=row.querySelector("input");
+      try{
+        if(b.dataset.act==="del"){ if(!confirm("Remove this key? Whatever uses it stops working.")) return; await api("keys/"+name,{method:"DELETE"}); toast("Removed."); return loadKeys(); }
+        if(!inp.value.trim()) return toast("Paste the key first.");
+        b.disabled=true; b.textContent="Checking…";
+        try{ const r=await api("keys/"+name,{method:"PUT",body:{value:inp.value}}); toast(r.note||"Saved."); }
+        catch(e){ if(e.data?.canForce && confirm(e.message+"\n\nSave it anyway?")){ const r=await api("keys/"+name,{method:"PUT",body:{value:inp.value,force:true}}); toast("Saved without passing the check."); } else throw e; }
+        inp.value=""; loadKeys();
+      }catch(e){ toast(e.message); b.disabled=false; b.textContent="Save"; }
+    });
+  }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
 async function loadTeam(){
   const el=$("#wTeam"); if(!el) return;
   try{ const {users}=await api("users");
@@ -267,7 +294,7 @@ const tAdd=$("#tAdd"); if(tAdd) tAdd.onclick=async()=>{
 const R={status:loadStatus,approvals:loadApprovals,activity:loadActivity};
 document.querySelectorAll("[data-refresh]").forEach(b=>b.onclick=()=>R[b.dataset.refresh]());
 $("#locSel").onchange=e=>{ loc=e.target.value; try{ sessionStorage.setItem("glytch_loc",loc); }catch{} $("#wContacts").innerHTML=""; refreshAll(); };
-function refreshAll(){ loadStatus(); loadApprovals(); loadActivity(); loadTeam(); }
+function refreshAll(){ loadStatus(); loadApprovals(); loadActivity(); loadTeam(); loadKeys(); }
 setInterval(()=>{ if(me&&!document.hidden&&!editing){ loadStatus(); } },60000);
 
 /* ---------- boot ---------- */

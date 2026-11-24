@@ -8,6 +8,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { KEY_CATALOG, keyring, checkKey, knownKey } from "./keys.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -15,6 +16,8 @@ const BRIDGE = (process.env.BRIDGE_URL || "").replace(/\/$/, "");
 const SECRET = process.env.SESSION_SECRET || "";
 const SECURE = process.env.NODE_ENV === "production";
 if (!SECRET || SECRET.length < 24) { console.error("SESSION_SECRET must be set (24+ characters)."); process.exit(1); }
+const VAULT = keyring(process.env.SECRETS_KEY || SECRET);
+const SERVICE_KEY = process.env.SERVICE_KEY || "";
 
 // ---------------------------------------------------------------- database
 const db = new pg.Pool({
@@ -33,6 +36,8 @@ async function migrate() {
     user_id INT PRIMARY KEY REFERENCES portal.users(id) ON DELETE CASCADE, layout JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await db.query(`CREATE TABLE IF NOT EXISTS portal.events (
     id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), user_id INT, event TEXT NOT NULL, detail JSONB)`);
+  await db.query(`CREATE TABLE IF NOT EXISTS portal.secrets (
+    name TEXT PRIMARY KEY, sealed TEXT NOT NULL, last4 TEXT NOT NULL, note TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_by INT)`);
   // owner bootstrap: only when no owner exists; never a "first visitor claims it" sign-up
   const { rows } = await db.query(`SELECT 1 FROM portal.users WHERE role='owner' LIMIT 1`);
   if (!rows.length && process.env.PORTAL_OWNER_EMAIL && process.env.PORTAL_OWNER_PASSWORD) {
@@ -149,6 +154,19 @@ function serveFile(res, file, cache = "no-cache") {
   fs.createReadStream(file).pipe(res);
 }
 
+// ---------------------------------------------------------------- service config (gateway + bridge pull keys here)
+async function internalConfig(req, res, u0) {
+  const given = String(req.headers["x-service-key"] || "");
+  if (!SERVICE_KEY || given.length !== SERVICE_KEY.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(SERVICE_KEY))) return send(res, 401, { error: "No." });
+  const who = u0.searchParams.get("for");
+  const names = KEY_CATALOG.filter(k => k.for === who).map(k => k.name);
+  const { rows } = await db.query(`SELECT name, sealed FROM portal.secrets WHERE name = ANY($1)`, [names]);
+  const out = {};
+  for (const r of rows) { try { out[r.name] = VAULT.open(r.sealed); } catch { console.error("Could not decrypt", r.name); } }
+  res.setHeader("Cache-Control", "no-store");
+  return send(res, 200, { config: out });
+}
+
 // ---------------------------------------------------------------- routes
 const server = http.createServer(async (req, res) => {
   const u0 = new URL(req.url, "http://x"), p = u0.pathname;
@@ -160,6 +178,7 @@ const server = http.createServer(async (req, res) => {
     if (STATIC[p]) return serveFile(res, STATIC[p], "public, max-age=86400");
     if (p === "/kit" || p === "/kit/") return serveFile(res, path.join(root, "public/kit/index.html"));
     if (p === "/kit/app.html") return serveFile(res, path.join(root, "public/kit/app.html"));
+    if (p === "/internal/config") return internalConfig(req, res, u0);
     if (!p.startsWith("/portal-api/")) return serveFile(res, path.join(root, "public/index.html"));
 
     // mutating API calls must come from the portal page itself
@@ -260,6 +279,33 @@ const server = http.createServer(async (req, res) => {
     if (api === "events" && can(u, "admin")) {
       const { rows } = await db.query(`SELECT e.at, e.event, e.detail, u.email FROM portal.events e LEFT JOIN portal.users u ON u.id=e.user_id ORDER BY e.id DESC LIMIT 100`);
       return send(res, 200, { events: rows });
+    }
+
+    if (api === "keys" || api.startsWith("keys/")) {
+      if (u.role !== "owner") return send(res, 403, { error: "Only the owner manages keys." });
+      if (api === "keys" && req.method === "GET") {
+        const { rows } = await db.query(`SELECT name, last4, note, updated_at FROM portal.secrets`);
+        const have = Object.fromEntries(rows.map(r => [r.name, r]));
+        return send(res, 200, { keys: KEY_CATALOG.map(k => ({ name: k.name, group: k.group, label: k.label, help: k.help, set: !!have[k.name], last4: have[k.name]?.last4 || "", note: have[k.name]?.note || "", updated: have[k.name]?.updated_at || null})) });
+      }
+      const name = api.slice(5);
+      if (!knownKey(name)) return send(res, 404, { error: "Unknown key." });
+      if (req.method === "PUT") {
+        const { value = "", force = false } = await readJson(req);
+        const v = String(value).trim();
+        if (v.length < 8 || v.length > 4000 || /\s/.test(v)) return send(res, 400, { error: "That value doesn't look like a key (no spaces, 8+ characters)." });
+        const chk = await checkKey(name, v);
+        if (!chk.ok && !force) return send(res, 422, { error: chk.note, canForce: true });
+        await db.query(`INSERT INTO portal.secrets (name, sealed, last4, note, updated_by) VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT (name) DO UPDATE SET sealed=$2, last4=$3, note=$4, updated_by=$5, updated_at=now()`, [name, VAULT.seal(v), v.slice(-4), chk.note, u.id]);
+        await logEvent(u.id, "key-saved", { name, verified: chk.ok && !chk.unverified });
+        return send(res, 200, { ok: true, note: chk.note });
+      }
+      if (req.method === "DELETE") {
+        await db.query(`DELETE FROM portal.secrets WHERE name=$1`, [name]);
+        await logEvent(u.id, "key-removed", { name });
+        return send(res, 200, { ok: true });
+      }
     }
 
     if (api.startsWith("bridge/")) return bridge(req, res, u, api.slice(7) + (u0.search || ""));

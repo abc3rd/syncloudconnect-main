@@ -214,10 +214,36 @@ async function glytchCommand(cmd, arg, chatState) {
 
 // ---------------------------------------------------------------- bot loop
 const bots = [];
-for (const [key, persona] of Object.entries(PERSONAS)) {
-  const token = process.env[`${persona.env}_BOT_TOKEN`];
-  if (token) bots.push({ key, persona, token, pair: process.env[`${persona.env}_PAIR_CODE`] || "", status: "starting" });
+// start/replace bots whenever a *_BOT_TOKEN appears or changes (env or portal)
+function syncBots() {
+  for (const [key, persona] of Object.entries(PERSONAS)) {
+    const token = process.env[`${persona.env}_BOT_TOKEN`] || "";
+    const cur = bots.find(b => b.key === key);
+    if (cur && cur.token === token) continue;
+    if (cur) { cur.stopped = true; bots.splice(bots.indexOf(cur), 1); log(`[${key}] token changed, restarting`); }
+    if (!token) continue;
+    const bot = { key, persona, token, pair: process.env[`${persona.env}_PAIR_CODE`] || "", status: "starting" };
+    bots.push(bot);
+    if (started) runBot(bot);
+  }
 }
+let started = false;
+
+// keys entered in the GLYTCH Portal (Keys & connections) override nothing set by hand on Railway
+const PORTAL = (process.env.PORTAL_URL || "").replace(/\/$/, "");
+const fromEnv = new Set(Object.keys(process.env));
+async function pullPortalConfig() {
+  if (!PORTAL || !process.env.SERVICE_KEY) return;
+  try {
+    const r = await fetch(`${PORTAL}/internal/config?for=gateway`, { headers: { "x-service-key": process.env.SERVICE_KEY }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error("portal " + r.status);
+    const { config = {} } = await r.json();
+    let changed = [];
+    for (const [k, v] of Object.entries(config)) if (!fromEnv.has(k) && process.env[k] !== v) { process.env[k] = v; changed.push(k); }
+    if (changed.length) { log("Keys from portal:", changed.join(", ")); syncBots(); }
+  } catch (e) { log("Portal config pull failed:", e.message); }
+}
+syncBots();
 
 async function handle(bot, msg) {
   const st = bot.state;
@@ -266,10 +292,11 @@ async function runBot(bot) {
   bot.state = loadState(bot.key);
   try { const me = await tg(bot.token, "getMe", {}); bot.username = me.username; bot.status = "running"; log(`[${bot.key}] @${me.username} online`); }
   catch (e) { bot.status = "bad token: " + e.message; log(`[${bot.key}] ${bot.status}`); return; }
-  for (;;) {
+  while (!bot.stopped) {
     try {
       const updates = await tg(bot.token, "getUpdates", { offset: bot.state.offset, timeout: 25, allowed_updates: ["message"] }, 35000);
       for (const u of updates) {
+        if (bot.stopped) break;
         bot.state.offset = u.update_id + 1; saveState(bot.key, bot.state);
         if (u.message) await handle(bot, u.message).catch(e => log(`[${bot.key}] handler error:`, e.message));
       }
@@ -284,6 +311,7 @@ http.createServer((req, res) => {
   res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify({ gateway: "GLYTCH Telegram gateway", bots: bots.map(b => ({ bot: b.key, username: b.username, status: b.status })), openwebui: boot }));
 }).listen(Number(process.env.PORT) || 3000, async () => {
+  await pullPortalConfig();
   log(`Telegram gateway on :${process.env.PORT || 3000}; bots configured: ${bots.map(b => b.key).join(", ") || "none yet (add *_BOT_TOKEN variables)"}`);
   if (OWUI) {
     for (let i = 0; i < 30; i++) {
@@ -297,5 +325,7 @@ http.createServer((req, res) => {
     setTimeout(() => runAudit().catch(e => log("SITE_AUDIT failed:", e.message)), 15000);
     setInterval(() => runAudit().catch(e => log("SITE_AUDIT failed:", e.message)), 24 * 3600 * 1000);
   }
+  started = true;
   bots.forEach(b => runBot(b));
+  setInterval(pullPortalConfig, Number(process.env.PORTAL_PULL_MS) || 60000);
 });

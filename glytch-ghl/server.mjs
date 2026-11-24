@@ -5,7 +5,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { withLocation, locationFromReq, locations, selfTest } from "./api/_lib.js";
+import { withLocation, locationFromReq, locations, selfTest, resetTokenCache } from "./api/_lib.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT) || 3000;
@@ -32,8 +32,30 @@ const server = http.createServer(async (req, res) => {
   }
   res.writeHead(404); res.end("Not found");
 });
+// GoHighLevel tokens entered in the GLYTCH Portal (Keys & connections); hand-set Railway variables win
+const PORTAL = (process.env.PORTAL_URL || "").replace(/\/$/, "");
+const fromEnv = new Set(Object.keys(process.env));
+async function pullPortalConfig() {
+  if (!PORTAL || !process.env.SERVICE_KEY) return false;
+  try {
+    const r = await fetch(`${PORTAL}/internal/config?for=bridge`, { headers: { "x-service-key": process.env.SERVICE_KEY }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error("portal " + r.status);
+    const { config = {} } = await r.json();
+    const changed = Object.entries(config).filter(([k, v]) => !fromEnv.has(k) && process.env[k] !== v);
+    for (const [k, v] of changed) process.env[k] = v;
+    if (changed.length) {
+      resetTokenCache();
+      console.log("Keys from portal:", changed.map(c => c[0]).join(", "));
+      try { console.log("GoHighLevel self-test:", JSON.stringify(await selfTest())); } catch (e) { console.log("GoHighLevel self-test failed:", e.message); }
+    }
+    return changed.length > 0;
+  } catch (e) { console.log("Portal config pull failed:", e.message); return false; }
+}
+
 server.listen(port, async () => {
   console.log(`GLYTCH bridge on :${port}; locations: ${Object.keys(locations()).join(", ") || "none set"}`);
+  if (await pullPortalConfig()) return void setInterval(pullPortalConfig, Number(process.env.PORTAL_PULL_MS) || 60000);
+  setInterval(pullPortalConfig, Number(process.env.PORTAL_PULL_MS) || 60000);
   if (process.env.GHL_PIT || Object.keys(process.env).some(k => k.startsWith("GHL_PIT_"))) {
     try { console.log("GoHighLevel self-test:", JSON.stringify(await selfTest())); }
     catch (e) { console.log("GoHighLevel self-test failed:", e.message); }

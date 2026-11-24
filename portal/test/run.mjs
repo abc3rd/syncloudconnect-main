@@ -19,7 +19,18 @@ const run = (file, cwd, env) => new Promise((ok, no) => {
 const { startMockGhl } = await import(path.join(bridgeDir, "test/mock-ghl.mjs"));
 const { db: ghl, server: ghlSrv } = await startMockGhl(4016);
 await run("server.mjs", bridgeDir, { PORT: "4031", GHL_BASE_URL: "http://127.0.0.1:4016", GHL_PIT: "test-pit", GHL_LOCATIONS: "scr=loc1,omega-ui=loc2", GLYTCH_ADMIN_KEY: "adm", GLYTCH_AGENT_KEY: "agt", GLYTCH_DATA_DIR: "/tmp/portal-test-bridge-" + Date.now() });
-const portalOut = await run("server.mjs", path.resolve(here, ".."), { PORT: "4032", DATABASE_URL: "postgres://postgres:pw@127.0.0.1:5499/railway", PGSSL: "off", SESSION_SECRET: "x".repeat(40), BRIDGE_URL: "http://127.0.0.1:4031", BRIDGE_ADMIN_KEY: "adm", BRIDGE_AGENT_KEY: "agt", PORTAL_OWNER_EMAIL: "Owner@Example.com", PORTAL_OWNER_PASSWORD: "TempOwnerPass1" });
+// fake Telegram for key checks + the gateway
+import http from "node:http";
+const tgSrv = http.createServer((q, s2) => {
+  const m = q.url.match(/^\/bot([^/]+)\/(\w+)/); const tok = m?.[1] || "";
+  const ok = r => { s2.writeHead(200, { "content-type": "application/json" }); s2.end(JSON.stringify({ ok: true, result: r })); };
+  if (!tok.startsWith("111111111:")) { s2.writeHead(401); return s2.end(JSON.stringify({ ok: false, description: "Unauthorized" })); }
+  if (m[2] === "getMe") return ok({ id: 1, username: "glytch_test_bot" });
+  if (m[2] === "getUpdates") return setTimeout(() => ok([]), 200);
+  ok({});
+});
+await new Promise(r => tgSrv.listen(4033, r));
+const portalOut = await run("server.mjs", path.resolve(here, ".."), { PORT: "4032", DATABASE_URL: "postgres://postgres:pw@127.0.0.1:5499/railway", PGSSL: "off", SESSION_SECRET: "x".repeat(40), BRIDGE_URL: "http://127.0.0.1:4031", BRIDGE_ADMIN_KEY: "adm", BRIDGE_AGENT_KEY: "agt", PORTAL_OWNER_EMAIL: "Owner@Example.com", PORTAL_OWNER_PASSWORD: "TempOwnerPass1", SERVICE_KEY: "svc-key-0123456789abcdef", TELEGRAM_API_BASE: "http://127.0.0.1:4033", GHL_BASE_URL: "http://127.0.0.1:4016" });
 
 let pass = 0, fail = 0;
 const t = (n, c, x = "") => { c ? pass++ : fail++; console.log(`${c ? "PASS" : "FAIL"}  ${n}${c ? "" : "  " + x}`); };
@@ -92,11 +103,40 @@ r = await owner(`/portal-api/users/${sid}/reset`, { method: "POST" }); t("owner 
 const oid = (await owner("/portal-api/users")).json.users.find(u => u.role === "owner").id;
 r = await owner(`/portal-api/users/${oid}`, { method: "PATCH", body: { disabled: true } }); t("can't disable the owner", r.status === 403);
 
+// keys & connections
+const GOOD_TG = "111111111:AAH" + "x".repeat(32);
+r = await staff("/portal-api/keys"); t("staff can't see keys", r.status === 401 || r.status === 403);
+r = await viewer("/portal-api/keys"); t("viewer can't see keys", r.status === 403);
+r = await owner("/portal-api/keys"); t("owner sees key list, nothing set", r.status === 200 && r.json.keys.length >= 7 && r.json.keys.every(k => !k.set));
+r = await owner("/portal-api/keys/NOT_A_KEY", { method: "PUT", body: { value: "abcdefghijk" } }); t("unknown key name refused", r.status === 404);
+r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { value: "not a token" } }); t("value with spaces refused", r.status === 400);
+r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { value: "222222222:AAH" + "y".repeat(32) } }); t("token Telegram rejects is not saved", r.status === 422 && r.json.canForce);
+r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { value: GOOD_TG } }); t("good token checked with Telegram and saved", r.status === 200 && /@glytch_test_bot/.test(r.json.note), JSON.stringify(r.json));
+r = await owner("/portal-api/keys"); const gk = r.json.keys.find(k => k.name === "GLYTCH_BOT_TOKEN");
+t("saved key shows only last 4", gk.set && gk.last4 === GOOD_TG.slice(-4) && !JSON.stringify(r.json).includes(GOOD_TG));
+const { rows: sec } = await (async () => { const pgm = (await import("pg")).default; const c = new pgm.Client({ connectionString: "postgres://postgres:pw@127.0.0.1:5499/railway" }); await c.connect(); const x = await c.query("SELECT sealed FROM portal.secrets"); await c.end(); return x; })();
+t("stored encrypted in Postgres (no plain token)", sec.length === 1 && !sec[0].sealed.includes("AAH"));
+let ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway"); t("service config needs the service key", ir.status === 401);
+ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway", { headers: { "x-service-key": "wrong-key-0123456789abc" } }); t("wrong service key refused", ir.status === 401);
+ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway", { headers: { "x-service-key": "svc-key-0123456789abcdef" } }); let ij = await ir.json();
+t("gateway gets its decrypted keys", ij.config.GLYTCH_BOT_TOKEN === GOOD_TG);
+r = await owner("/portal-api/keys/GHL_PIT_SCR", { method: "PUT", body: { value: "pit-1234abcd-0000-1111-2222-333344445555", force: true } }); t("GHL token saved", r.status === 200);
+ir = await fetch("http://127.0.0.1:4032/internal/config?for=bridge", { headers: { "x-service-key": "svc-key-0123456789abcdef" } }); ij = await ir.json();
+t("bridge gets only bridge keys", ij.config.GHL_PIT_SCR?.startsWith("pit-") && !ij.config.GLYTCH_BOT_TOKEN);
+// live pickup: a gateway with no bot tokens comes online after pulling from the portal
+const gwDir = path.resolve(here, "../../telegram-gateway");
+const gwOut = await new Promise((ok, no) => { const p = spawn("node", ["server.mjs"], { cwd: gwDir, env: { ...process.env, PORT: "4034", TELEGRAM_API_BASE: "http://127.0.0.1:4033", PORTAL_URL: "http://127.0.0.1:4032", SERVICE_KEY: "svc-key-0123456789abcdef", DATA_DIR: "/tmp/portal-test-gw-" + Date.now(), SITE_AUDIT: "off", GLYTCH_PAIR_CODE: "GLY-0000" }, stdio: ["ignore", "pipe", "pipe"] }); procs.push(p); let o = ""; const to = setTimeout(() => ok(o), 8000); p.stdout.on("data", d => { o += d; if (/glytch\] @glytch_test_bot online/.test(o)) { clearTimeout(to); ok(o); } }); p.stderr.on("data", d => o += d); });
+t("gateway picks up the bot token from the portal and goes online", /Keys from portal: GLYTCH_BOT_TOKEN/.test(gwOut) && /@glytch_test_bot online/.test(gwOut), gwOut.slice(-400));
+const brOut = await new Promise(ok => { const p = spawn("node", ["server.mjs"], { cwd: bridgeDir, env: { ...process.env, PORT: "4035", GHL_BASE_URL: "http://127.0.0.1:4016", GHL_PIT: "test-pit", GHL_LOCATIONS: "scr=loc1", GLYTCH_ADMIN_KEY: "adm", GLYTCH_AGENT_KEY: "agt", GLYTCH_DATA_DIR: "/tmp/portal-test-br2-" + Date.now(), PORTAL_URL: "http://127.0.0.1:4032", SERVICE_KEY: "svc-key-0123456789abcdef" }, stdio: ["ignore", "pipe", "pipe"] }); procs.push(p); let o = ""; const to = setTimeout(() => ok(o), 6000); p.stdout.on("data", d => { o += d; if (/self-test/.test(o)) { clearTimeout(to); ok(o); } }); });
+t("bridge picks up the GoHighLevel token from the portal", /Keys from portal: GHL_PIT_SCR/.test(brOut), brOut.slice(-300));
+r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "DELETE" }); t("owner can remove a key", r.status === 200);
+r = await owner("/portal-api/events"); t("key saves are in the activity log (names only)", r.json.events.some(e => e.event === "key-saved") && !JSON.stringify(r.json).includes(GOOD_TG));
+
 // brute force
 const bad = client(); let last;
 for (let i = 0; i < 9; i++) last = await bad("/portal-api/login", { method: "POST", body: { email: "x@y.com", password: "bad" } });
 t("login rate limit kicks in", last.status === 429);
 
 console.log(`\n${pass} passed, ${fail} failed`);
-procs.forEach(p => p.kill()); ghlSrv.close(); await pgs.stop();
+procs.forEach(p => p.kill()); ghlSrv.close(); tgSrv.close(); await pgs.stop();
 process.exit(fail ? 1 : 0);
