@@ -30,7 +30,18 @@ const tgSrv = http.createServer((q, s2) => {
   ok({});
 });
 await new Promise(r => tgSrv.listen(4033, r));
-const portalOut = await run("server.mjs", path.resolve(here, ".."), { PORT: "4032", DATABASE_URL: "postgres://postgres:pw@127.0.0.1:5499/railway", PGSSL: "off", SESSION_SECRET: "x".repeat(40), BRIDGE_URL: "http://127.0.0.1:4031", BRIDGE_ADMIN_KEY: "adm", BRIDGE_AGENT_KEY: "agt", PORTAL_OWNER_EMAIL: "Owner@Example.com", PORTAL_OWNER_PASSWORD: "TempOwnerPass1", SERVICE_KEY: "svc-key-0123456789abcdef", TELEGRAM_API_BASE: "http://127.0.0.1:4033", GHL_BASE_URL: "http://127.0.0.1:4016" });
+// fake Resend (email API)
+const mails = [];
+const rsSrv = http.createServer(async (q, s2) => {
+  let b = ""; for await (const c of q) b += c;
+  if ((q.headers.authorization || "") !== "Bearer re_testkey_123456") { s2.writeHead(401); return s2.end('{"message":"bad key"}'); }
+  if (q.url === "/domains") { s2.writeHead(200); return s2.end('{"data":[]}'); }
+  if (q.url === "/emails") { mails.push(JSON.parse(b)); s2.writeHead(200); return s2.end('{"id":"em_' + mails.length + '"}'); }
+  s2.writeHead(404); s2.end("{}");
+});
+await new Promise(r => rsSrv.listen(4036, r));
+const tokenFrom = link => String(link).split("#t=")[1];
+const portalOut = await run("server.mjs", path.resolve(here, ".."), { PORT: "4032", DATABASE_URL: "postgres://postgres:pw@127.0.0.1:5499/railway", PGSSL: "off", SESSION_SECRET: "x".repeat(40), BRIDGE_URL: "http://127.0.0.1:4031", BRIDGE_ADMIN_KEY: "adm", BRIDGE_AGENT_KEY: "agt", PORTAL_OWNER_EMAIL: "Owner@Example.com", PORTAL_OWNER_PASSWORD: "TempOwnerPass1", SERVICE_KEY: "svc-key-0123456789abcdef", TELEGRAM_API_BASE: "http://127.0.0.1:4033", GHL_BASE_URL: "http://127.0.0.1:4016", RESEND_API_BASE: "http://127.0.0.1:4036", PUBLIC_URL: "http://127.0.0.1:4032" });
 
 let pass = 0, fail = 0;
 const t = (n, c, x = "") => { c ? pass++ : fail++; console.log(`${c ? "PASS" : "FAIL"}  ${n}${c ? "" : "  " + x}`); };
@@ -63,15 +74,38 @@ r = await owner("/portal-api/bridge/read?op=contacts.search&query=smith", { head
 r = await owner("/portal-api/bridge/jobs", { method: "POST", body: { job: "format" }, headers: { "x-glytch-location": "scr" } }); t("owner runs a scan in scr", r.status === 200 && r.json.summary.format.proposed === 2, JSON.stringify(r.json));
 
 // team
-r = await owner("/portal-api/users", { method: "POST", body: { email: "staff@example.com", name: "Sam", role: "staff" } }); const staffPw = r.json.tempPassword;
-t("owner adds staff with temp password", r.status === 201 && staffPw?.length >= 10);
-r = await owner("/portal-api/users", { method: "POST", body: { email: "viewer@example.com", role: "viewer" } }); const viewPw = r.json.tempPassword;
+r = await owner("/portal-api/users", { method: "POST", body: { email: "staff@example.com", name: "Sam", role: "staff" } });
+t("no email set up: invite returns a one-time link, never a password", r.status === 201 && !r.json.emailed && /\/set-password#t=/.test(r.json.inviteLink) && !("tempPassword" in r.json), JSON.stringify(r.json));
+const staffTok = tokenFrom(r.json.inviteLink);
 r = await owner("/portal-api/users", { method: "POST", body: { email: "staff@example.com", role: "staff" } }); t("duplicate email rejected", r.status === 409);
 const staff = client(), viewer = client();
-await staff("/portal-api/login", { method: "POST", body: { email: "staff@example.com", password: staffPw } });
-await staff("/portal-api/password", { method: "POST", body: { current: staffPw, next: "StaffPass#123456" } });
-await viewer("/portal-api/login", { method: "POST", body: { email: "viewer@example.com", password: viewPw } });
-await viewer("/portal-api/password", { method: "POST", body: { current: viewPw, next: "ViewerPass#123456" } });
+r = await staff("/portal-api/login", { method: "POST", body: { email: "staff@example.com", password: "anything-at-all" } }); t("invited user can't log in before choosing a password", r.status === 401);
+r = await staff("/portal-api/link/check", { method: "POST", body: { token: staffTok } }); t("invite link names the right email", r.status === 200 && r.json.email === "staff@example.com" && r.json.kind === "invite");
+r = await staff("/portal-api/link/set", { method: "POST", body: { token: staffTok, password: "short" } }); t("short password refused on link page", r.status === 400);
+r = await staff("/portal-api/link/set", { method: "POST", body: { token: staffTok, password: "StaffPass#123456" } }); t("choosing a password logs them straight in", r.status === 200 && r.json.user.email === "staff@example.com" && !r.json.user.mustChange);
+r = await staff("/portal-api/me"); t("session works after setting password", r.status === 200);
+r = await anon("/portal-api/link/set", { method: "POST", body: { token: staffTok, password: "AnotherPass#999" } }); t("a link works only once", r.status === 410);
+r = await anon("/portal-api/login", { method: "POST", body: { email: "staff@example.com", password: "StaffPass#123456" } }); t("they log in normally with email + their password", r.status === 200);
+// turn on email: owner saves a Resend key in Keys & connections
+r = await owner("/portal-api/keys/RESEND_API_KEY", { method: "PUT", body: { value: "re_wrongkey_000000" } }); t("bad Resend key refused", r.status === 422);
+r = await owner("/portal-api/keys/RESEND_API_KEY", { method: "PUT", body: { value: "re_testkey_123456" } }); t("Resend key checked and saved", r.status === 200, JSON.stringify(r.json));
+r = await owner("/portal-api/users", { method: "POST", body: { email: "viewer@example.com", role: "viewer" } });
+t("with email on, invite is emailed and the link isn't returned", r.status === 201 && r.json.emailed && !r.json.inviteLink && mails.length === 1 && mails[0].to[0] === "viewer@example.com", JSON.stringify(r.json));
+t("invite email carries the set-password link", /set-password#t=/.test(mails[0].text) && /set-password#t=/.test(mails[0].html));
+const viewTok = mails[0].text.match(/#t=([A-Za-z0-9_-]+)/)[1];
+r = await viewer("/portal-api/link/set", { method: "POST", body: { token: viewTok, password: "ViewerPass#123456" } }); t("viewer sets password from the emailed link", r.status === 200);
+// forgot password
+const before = mails.length;
+r = await anon("/portal-api/link", { method: "POST", body: { email: "nobody@example.com" } }); const genericMsg = r.json.message;
+t("unknown email gets the same answer and no email", r.status === 200 && mails.length === before);
+r = await anon("/portal-api/link", { method: "POST", body: { email: "Viewer@Example.com" } });
+t("known email: same answer, link emailed", r.json.message === genericMsg && mails.length === before + 1 && mails.at(-1).to[0] === "viewer@example.com");
+const resetTok = mails.at(-1).text.match(/#t=([A-Za-z0-9_-]+)/)[1];
+r = await anon("/portal-api/link/check", { method: "POST", body: { token: resetTok } }); t("reset link is a 1-hour reset link", r.json.kind === "reset");
+r = await anon("/portal-api/link/set", { method: "POST", body: { token: resetTok, password: "ViewerNewPass#2026" } }); t("forgot-password link sets a new password", r.status === 200);
+r = await viewer("/portal-api/me"); t("old sessions end after a reset", r.status === 401);
+await viewer("/portal-api/login", { method: "POST", body: { email: "viewer@example.com", password: "ViewerNewPass#2026" } });
+r = await viewer("/portal-api/me"); t("logs in with the new password", r.status === 200);
 
 r = await staff("/portal-api/bridge/proposals?status=pending&location=scr"); const props = r.json.proposals; t("staff sees pending proposals", props?.length === 2);
 r = await staff("/portal-api/bridge/decide", { method: "POST", body: { id: props[0].id, decision: "approve" } }); t("STAFF CANNOT APPROVE (403)", r.status === 403);
@@ -99,7 +133,8 @@ r = await owner("/portal-api/layout"); t("other users' layouts are separate", r.
 const sid = (await owner("/portal-api/users")).json.users.find(u => u.email === "staff@example.com").id;
 r = await owner(`/portal-api/users/${sid}`, { method: "PATCH", body: { disabled: true } });
 r = await staff("/portal-api/me"); t("disabling a user ends their session immediately", r.status === 401);
-r = await owner(`/portal-api/users/${sid}/reset`, { method: "POST" }); t("owner can issue a new temp password", r.json.tempPassword?.length >= 10);
+const m0 = mails.length;
+r = await owner(`/portal-api/users/${sid}/reset`, { method: "POST" }); t("'Send new link' emails a fresh link instead of a password", r.json.emailed && mails.length === m0 + 1 && !("tempPassword" in r.json));
 const oid = (await owner("/portal-api/users")).json.users.find(u => u.role === "owner").id;
 r = await owner(`/portal-api/users/${oid}`, { method: "PATCH", body: { disabled: true } }); t("can't disable the owner", r.status === 403);
 
@@ -107,7 +142,7 @@ r = await owner(`/portal-api/users/${oid}`, { method: "PATCH", body: { disabled:
 const GOOD_TG = "111111111:AAH" + "x".repeat(32);
 r = await staff("/portal-api/keys"); t("staff can't see keys", r.status === 401 || r.status === 403);
 r = await viewer("/portal-api/keys"); t("viewer can't see keys", r.status === 403);
-r = await owner("/portal-api/keys"); t("owner sees key list, nothing set", r.status === 200 && r.json.keys.length >= 7 && r.json.keys.every(k => !k.set));
+r = await owner("/portal-api/keys"); t("owner sees key list, only the email key set", r.status === 200 && r.json.keys.length >= 8 && r.json.keys.filter(k => k.set).map(k => k.name).join() === "RESEND_API_KEY");
 r = await owner("/portal-api/keys/NOT_A_KEY", { method: "PUT", body: { value: "abcdefghijk" } }); t("unknown key name refused", r.status === 404);
 r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { value: "not a token" } }); t("value with spaces refused", r.status === 400);
 r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { value: "222222222:AAH" + "y".repeat(32) } }); t("token Telegram rejects is not saved", r.status === 422 && r.json.canForce);
@@ -115,7 +150,7 @@ r = await owner("/portal-api/keys/GLYTCH_BOT_TOKEN", { method: "PUT", body: { va
 r = await owner("/portal-api/keys"); const gk = r.json.keys.find(k => k.name === "GLYTCH_BOT_TOKEN");
 t("saved key shows only last 4", gk.set && gk.last4 === GOOD_TG.slice(-4) && !JSON.stringify(r.json).includes(GOOD_TG));
 const { rows: sec } = await (async () => { const pgm = (await import("pg")).default; const c = new pgm.Client({ connectionString: "postgres://postgres:pw@127.0.0.1:5499/railway" }); await c.connect(); const x = await c.query("SELECT sealed FROM portal.secrets"); await c.end(); return x; })();
-t("stored encrypted in Postgres (no plain token)", sec.length === 1 && !sec[0].sealed.includes("AAH"));
+t("stored encrypted in Postgres (no plain keys)", sec.length === 2 && sec.every(x => !x.sealed.includes("AAH") && !x.sealed.includes("re_test")));
 let ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway"); t("service config needs the service key", ir.status === 401);
 ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway", { headers: { "x-service-key": "wrong-key-0123456789abc" } }); t("wrong service key refused", ir.status === 401);
 ir = await fetch("http://127.0.0.1:4032/internal/config?for=gateway", { headers: { "x-service-key": "svc-key-0123456789abcdef" } }); let ij = await ir.json();
@@ -138,5 +173,5 @@ for (let i = 0; i < 9; i++) last = await bad("/portal-api/login", { method: "POS
 t("login rate limit kicks in", last.status === 429);
 
 console.log(`\n${pass} passed, ${fail} failed`);
-procs.forEach(p => p.kill()); ghlSrv.close(); tgSrv.close(); await pgs.stop();
+procs.forEach(p => p.kill()); ghlSrv.close(); tgSrv.close(); rsSrv.close(); await pgs.stop();
 process.exit(fail ? 1 : 0);

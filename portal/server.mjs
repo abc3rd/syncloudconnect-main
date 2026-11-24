@@ -9,6 +9,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { KEY_CATALOG, keyring, checkKey, knownKey } from "./keys.mjs";
+import { sendMail, linkEmail, mailReady } from "./mail.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -38,6 +39,10 @@ async function migrate() {
     id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), user_id INT, event TEXT NOT NULL, detail JSONB)`);
   await db.query(`CREATE TABLE IF NOT EXISTS portal.secrets (
     name TEXT PRIMARY KEY, sealed TEXT NOT NULL, last4 TEXT NOT NULL, note TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_by INT)`);
+  await db.query(`CREATE TABLE IF NOT EXISTS portal.links (
+    id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES portal.users(id) ON DELETE CASCADE, hash TEXT UNIQUE NOT NULL,
+    kind TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await loadPortalKeys();
   // owner bootstrap: only when no owner exists; never a "first visitor claims it" sign-up
   const { rows } = await db.query(`SELECT 1 FROM portal.users WHERE role='owner' LIMIT 1`);
   if (!rows.length && process.env.PORTAL_OWNER_EMAIL && process.env.PORTAL_OWNER_PASSWORD) {
@@ -154,6 +159,44 @@ function serveFile(res, file, cache = "no-cache") {
   fs.createReadStream(file).pipe(res);
 }
 
+// keys the portal itself uses (email sending), from Keys & connections; hand-set Railway variables win
+const envAtBoot = new Set(Object.keys(process.env));
+async function loadPortalKeys() {
+  const names = KEY_CATALOG.filter(k => k.for === "portal").map(k => k.name);
+  const { rows } = await db.query(`SELECT name, sealed FROM portal.secrets WHERE name = ANY($1)`, [names]);
+  for (const r of rows) if (!envAtBoot.has(r.name)) { try { process.env[r.name] = VAULT.open(r.sealed); } catch {} }
+  for (const n of names) if (!envAtBoot.has(n) && !rows.some(r => r.name === n)) delete process.env[n];
+}
+
+// ---------------------------------------------------------------- email sign-in links (invite + forgot password)
+const BASE_URL = (process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN : "http://localhost:" + PORT)).replace(/\/$/, "");
+const sha = s => crypto.createHash("sha256").update(s).digest("hex");
+async function makeLink(user, kind) {
+  const raw = crypto.randomBytes(32).toString("base64url");
+  const hours = kind === "invite" ? 24 * 7 : 1;
+  await db.query(`UPDATE portal.links SET used_at=now() WHERE user_id=$1 AND used_at IS NULL`, [user.id]); // only the newest link works
+  await db.query(`INSERT INTO portal.links (user_id, hash, kind, expires_at) VALUES ($1,$2,$3, now() + ($4 || ' hours')::interval)`, [user.id, sha(raw), kind, String(hours)]);
+  return `${BASE_URL}/set-password#t=${raw}`;
+}
+async function emailLink(user, kind) {
+  const link = await makeLink(user, kind);
+  const m = await sendMail({ to: user.email, ...linkEmail({ name: user.name, link, kind }) });
+  await logEvent(user.id, kind === "invite" ? "invite-sent" : "link-sent", { emailed: m.sent, reason: m.sent ? undefined : m.reason });
+  return { link, ...m };
+}
+async function findLink(raw) {
+  if (!raw || raw.length < 20) return null;
+  const { rows } = await db.query(`SELECT l.*, u.email, u.name, u.disabled FROM portal.links l JOIN portal.users u ON u.id=l.user_id WHERE l.hash=$1`, [sha(String(raw))]);
+  const l = rows[0];
+  if (!l || l.used_at || l.disabled || new Date(l.expires_at) < new Date()) return null;
+  return l;
+}
+const linkTries = new Map();
+function linkLimited(key, max = 5) {
+  const now = Date.now(), list = (linkTries.get(key) || []).filter(t => now - t < 36e5);
+  linkTries.set(key, list); if (list.length >= max) return true; list.push(now); return false;
+}
+
 // ---------------------------------------------------------------- service config (gateway + bridge pull keys here)
 async function internalConfig(req, res, u0) {
   const given = String(req.headers["x-service-key"] || "");
@@ -202,10 +245,37 @@ const server = http.createServer(async (req, res) => {
     }
     if (api === "logout") return send(res, 200, { ok: true }, { "Set-Cookie": cookie("", 0) });
 
+    // "Email me a link": same answer whether or not the email has access, so nobody can probe for accounts
+    if (api === "link" && req.method === "POST") {
+      const { email = "" } = await readJson(req);
+      const e = String(email).toLowerCase().trim();
+      const generic = { ok: true, message: "If that email has access, a link is on its way. Check your inbox (and spam)." };
+      if (linkLimited("ip:" + ip, 10) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return send(res, 200, generic);
+      const { rows } = await db.query(`SELECT * FROM portal.users WHERE email=$1 AND NOT disabled`, [e]);
+      if (rows[0] && !linkLimited("em:" + e, 5)) { const r = await emailLink(rows[0], "reset"); if (!r.sent) console.log("Sign-in link not emailed:", r.reason); }
+      return send(res, 200, generic);
+    }
+    if (api === "link/check" && req.method === "POST") {
+      const { token = "" } = await readJson(req);
+      const l = await findLink(token);
+      return l ? send(res, 200, { ok: true, email: l.email, name: l.name, kind: l.kind }) : send(res, 410, { error: "This link has expired or was already used. Ask for a new one." });
+    }
+    if (api === "link/set" && req.method === "POST") {
+      const { token = "", password = "" } = await readJson(req);
+      const l = await findLink(token);
+      if (!l) return send(res, 410, { error: "This link has expired or was already used. Ask for a new one." });
+      if (String(password).length < 10) return send(res, 400, { error: "Use at least 10 characters." });
+      const used = await db.query(`UPDATE portal.links SET used_at=now() WHERE id=$1 AND used_at IS NULL RETURNING id`, [l.id]);
+      if (!used.rows.length) return send(res, 410, { error: "This link was already used." });
+      const r = await db.query(`UPDATE portal.users SET pass_hash=$1, pass_ver=pass_ver+1, must_change=false, last_login=now() WHERE id=$2 RETURNING *`, [await hashPw(String(password)), l.user_id]);
+      await logEvent(l.user_id, "password-set-by-link", { kind: l.kind, ip });
+      return send(res, 200, { user: pub(r.rows[0]) }, { "Set-Cookie": cookie(makeSession(r.rows[0]), 7 * 86400) });
+    }
+
     const u = await userFrom(req);
     if (!u) return send(res, 401, { error: "Please log in." });
 
-    if (api === "me") return send(res, 200, { user: pub(u) });
+    if (api === "me") return send(res, 200, { user: pub(u), mailReady: mailReady() });
 
     if (api === "password" && req.method === "POST") {
       const { current = "", next = "" } = await readJson(req);
@@ -244,11 +314,12 @@ const server = http.createServer(async (req, res) => {
         const e = String(email).toLowerCase().trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return send(res, 400, { error: "Enter a valid email." });
         if (!["admin", "staff", "viewer"].includes(role) || (role === "admin" && u.role !== "owner")) return send(res, 403, { error: "You can't give that role." });
-        const temp = tempPassword();
         try {
-          const r = await db.query(`INSERT INTO portal.users (email, name, role, pass_hash, must_change) VALUES ($1,$2,$3,$4,true) RETURNING id, email, name, role`, [e, String(name).slice(0, 80), role, await hashPw(temp)]);
+          // no password yet: they choose one from the emailed link
+          const r = await db.query(`INSERT INTO portal.users (email, name, role, pass_hash, must_change) VALUES ($1,$2,$3,'unset',false) RETURNING id, email, name, role`, [e, String(name).slice(0, 80), role]);
           await logEvent(u.id, "user-created", { email: e, role });
-          return send(res, 201, { user: r.rows[0], tempPassword: temp });
+          const m = await emailLink(r.rows[0], "invite");
+          return send(res, 201, { user: r.rows[0], emailed: m.sent, ...(m.sent ? {} : { inviteLink: m.link, reason: m.reason }) });
         } catch (err) { if (err.code === "23505") return send(res, 409, { error: "That email already has an account." }); throw err; }
       }
     }
@@ -261,10 +332,11 @@ const server = http.createServer(async (req, res) => {
       if (!t) return send(res, 404, { error: "No such user." });
       if (t.role === "owner" || (t.role === "admin" && u.role !== "owner") || t.id === u.id) return send(res, 403, { error: "You can't change that account here." });
       if (um[2] && req.method === "POST") {
-        const temp = tempPassword();
-        await db.query(`UPDATE portal.users SET pass_hash=$1, pass_ver=pass_ver+1, must_change=true WHERE id=$2`, [await hashPw(temp), id]);
+        // ends their sessions and sends a fresh link; they pick the new password themselves
+        await db.query(`UPDATE portal.users SET pass_hash='unset', pass_ver=pass_ver+1 WHERE id=$1`, [id]);
         await logEvent(u.id, "password-reset", { target: t.email });
-        return send(res, 200, { tempPassword: temp });
+        const m = await emailLink(t, "reset");
+        return send(res, 200, { emailed: m.sent, ...(m.sent ? {} : { inviteLink: m.link, reason: m.reason }) });
       }
       if (req.method === "PATCH") {
         const b = await readJson(req);
@@ -299,11 +371,13 @@ const server = http.createServer(async (req, res) => {
         await db.query(`INSERT INTO portal.secrets (name, sealed, last4, note, updated_by) VALUES ($1,$2,$3,$4,$5)
           ON CONFLICT (name) DO UPDATE SET sealed=$2, last4=$3, note=$4, updated_by=$5, updated_at=now()`, [name, VAULT.seal(v), v.slice(-4), chk.note, u.id]);
         await logEvent(u.id, "key-saved", { name, verified: chk.ok && !chk.unverified });
+        await loadPortalKeys();
         return send(res, 200, { ok: true, note: chk.note });
       }
       if (req.method === "DELETE") {
         await db.query(`DELETE FROM portal.secrets WHERE name=$1`, [name]);
         await logEvent(u.id, "key-removed", { name });
+        await loadPortalKeys();
         return send(res, 200, { ok: true });
       }
     }

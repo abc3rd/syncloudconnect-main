@@ -71,6 +71,28 @@ th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}th{col
     <label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password" required>
     <button style="width:100%;margin-top:16px" type="submit">Log in</button>
     <div class="err" id="lErr"></div>
+    <p class="sub" style="margin:16px 0 0;text-align:center"><a href="#" id="toLink">First time here, or forgot your password? Email me a link</a></p>
+  </form>
+  <form class="authcard hidden" id="linkForm">
+    <h1><b>GLYTCH</b> PORTAL</h1>
+    <p class="sub">Enter your email. We'll send a link to choose your password.</p>
+    <label for="kEmail">Email</label><input id="kEmail" type="email" autocomplete="email" required>
+    <button style="width:100%;margin-top:16px" type="submit">Email me a link</button>
+    <div class="sub" id="kMsg" style="margin-top:10px"></div>
+    <p class="sub" style="margin:16px 0 0;text-align:center"><a href="#" id="toLogin">Back to log in</a></p>
+  </form>
+</div>
+
+<!-- ============ CHOOSE PASSWORD FROM EMAIL LINK ============ -->
+<div id="vSet" class="center hidden">
+  <form class="authcard" id="setForm">
+    <h1>Choose your password</h1>
+    <p class="sub" id="sWho">Checking your link…</p>
+    <label for="sNew">Password (10+ characters)</label><input id="sNew" type="password" autocomplete="new-password" minlength="10" required>
+    <label for="sNew2">Type it again</label><input id="sNew2" type="password" autocomplete="new-password" minlength="10" required>
+    <button style="width:100%;margin-top:16px" type="submit" id="sBtn" disabled>Save and log in</button>
+    <div class="err" id="sErr"></div>
+    <p class="sub hidden" id="sAgain" style="margin:16px 0 0;text-align:center"><a href="/">Ask for a new link</a></p>
   </form>
 </div>
 
@@ -78,8 +100,8 @@ th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}th{col
 <div id="vPass" class="center hidden">
   <form class="authcard" id="passForm">
     <h1>Set your password</h1>
-    <p class="sub">You're using a temporary password. Choose your own to continue.</p>
-    <label for="pCur">Current (temporary) password</label><input id="pCur" type="password" autocomplete="current-password" required>
+    <p class="sub">Choose a new password. Forgot the current one? Log out and use "Email me a link".</p>
+    <label for="pCur">Current password</label><input id="pCur" type="password" autocomplete="current-password" required>
     <label for="pNew">New password (10+ characters)</label><input id="pNew" type="password" autocomplete="new-password" minlength="10" required>
     <button style="width:100%;margin-top:16px" type="submit">Save and continue</button>
     <div class="err" id="pErr"></div>
@@ -169,7 +191,7 @@ const B=p=>api("bridge/"+p);
 const can=r=>me&&RANK[me.role]>=RANK[r];
 const nm=c=>c?([c.firstName,c.lastName].filter(Boolean).join(" ")||c.contactName||c.name||c.email||c.phone||c.id):"";
 const when=s=>s?new Date(s).toLocaleString():"";
-function show(v){ ["login","pass","app"].forEach(x=>$("#v"+x[0].toUpperCase()+x.slice(1)).classList.toggle("hidden",x!==v)); }
+function show(v){ ["login","pass","app","set"].forEach(x=>$("#v"+x[0].toUpperCase()+x.slice(1)).classList.toggle("hidden",x!==v)); }
 
 /* ---------- auth ---------- */
 $("#loginForm").onsubmit=async e=>{ e.preventDefault(); $("#lErr").textContent="";
@@ -178,6 +200,19 @@ $("#loginForm").onsubmit=async e=>{ e.preventDefault(); $("#lErr").textContent="
 $("#passForm").onsubmit=async e=>{ e.preventDefault(); $("#pErr").textContent="";
   try{ const r=await api("password",{method:"POST",body:{current:$("#pCur").value,next:$("#pNew").value}}); me=r.user; toast("Password saved."); start(); }
   catch(err){ $("#pErr").textContent=err.message; } };
+$("#toLink").onclick=e=>{ e.preventDefault(); $("#loginForm").classList.add("hidden"); $("#linkForm").classList.remove("hidden"); $("#kEmail").value=$("#lEmail").value; $("#kMsg").textContent=""; };
+$("#toLogin").onclick=e=>{ e.preventDefault(); $("#linkForm").classList.add("hidden"); $("#loginForm").classList.remove("hidden"); };
+$("#linkForm").onsubmit=async e=>{ e.preventDefault(); const b=e.submitter||$("#linkForm button"); b.disabled=true;
+  try{ const r=await api("link",{method:"POST",body:{email:$("#kEmail").value}}); $("#kMsg").textContent=r.message; }
+  catch(err){ $("#kMsg").textContent=err.message; } setTimeout(()=>b.disabled=false,4000); };
+const linkToken=()=>new URLSearchParams(location.hash.slice(1)).get("t")||"";
+async function openSetPage(){ show("set");
+  try{ const r=await api("link/check",{method:"POST",body:{token:linkToken()}}); $("#sWho").textContent=`For ${r.email}. You'll use this email and password to log in from now on.`; $("#sBtn").disabled=false; }
+  catch(err){ $("#sWho").textContent=err.message; $("#sAgain").classList.remove("hidden"); } }
+$("#setForm").onsubmit=async e=>{ e.preventDefault(); $("#sErr").textContent="";
+  if($("#sNew").value!==$("#sNew2").value) return $("#sErr").textContent="The two passwords don't match.";
+  try{ const r=await api("link/set",{method:"POST",body:{token:linkToken(),password:$("#sNew").value}}); me=r.user; history.replaceState(null,"","/"); toast("Password saved. You're in."); start(); }
+  catch(err){ $("#sErr").textContent=err.message; if(/expired|used/.test(err.message)) $("#sAgain").classList.remove("hidden"); } };
 $("#btnOut").onclick=async()=>{ await api("logout",{method:"POST"}).catch(()=>{}); location.reload(); };
 $("#btnPw").onclick=()=>show("pass");
 
@@ -276,20 +311,24 @@ async function loadKeys(){
     });
   }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
+function linkOut(r,what){
+  $("#tOut").innerHTML=r.emailed?`${esc(what)}: link emailed. They choose their own password from it.`
+    :`${esc(what)}. Email isn't sending yet (${esc(r.reason||"")}), so send them this one-time link yourself: <span class="secret">${esc(r.inviteLink)}</span>`;
+}
 async function loadTeam(){
   const el=$("#wTeam"); if(!el) return;
   try{ const {users}=await api("users");
     el.innerHTML=`<table><thead><tr><th>Person</th><th>Role</th><th>Last login</th><th></th></tr></thead><tbody>${users.map(x=>`<tr data-u="${x.id}"><td>${esc(x.name||"")} <span class="mono">${esc(x.email)}</span>${x.disabled?' <span class="tag del">disabled</span>':""}</td><td>${esc(x.role)}</td><td class="mono">${when(x.last_login)||"never"}</td>
-      <td>${x.role==="owner"||x.id===me.id?"":`<button class="ghost small" data-act="reset">New temp password</button> <button class="ghost small" data-act="${x.disabled?"enable":"disable"}">${x.disabled?"Enable":"Disable"}</button>`}</td></tr>`).join("")}</tbody></table>`;
+      <td>${x.role==="owner"||x.id===me.id?"":`<button class="ghost small" data-act="reset">Send new link</button> <button class="ghost small" data-act="${x.disabled?"enable":"disable"}">${x.disabled?"Enable":"Disable"}</button>`}</td></tr>`).join("")}</tbody></table>`;
     el.querySelectorAll("[data-act]").forEach(b=>b.onclick=async()=>{ const id=b.closest("[data-u]").dataset.u;
-      try{ if(b.dataset.act==="reset"){ const r=await api(`users/${id}/reset`,{method:"POST"}); $("#tOut").innerHTML=`Temporary password (share it privately; they'll set their own): <span class="secret">${esc(r.tempPassword)}</span>`; }
+      try{ if(b.dataset.act==="reset"){ const r=await api(`users/${id}/reset`,{method:"POST"}); linkOut(r,"New sign-in link"); }
         else { await api(`users/${id}`,{method:"PATCH",body:{disabled:b.dataset.act==="disable"}}); toast(b.dataset.act==="disable"?"Disabled. Their sessions ended.":"Enabled."); }
         loadTeam(); }catch(e){ toast(e.message); } });
   }catch(e){ el.innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
 const tAdd=$("#tAdd"); if(tAdd) tAdd.onclick=async()=>{
   try{ const r=await api("users",{method:"POST",body:{email:$("#tEmail").value,name:$("#tName").value,role:$("#tRole").value}});
-    $("#tOut").innerHTML=`Added ${esc(r.user.email)}. Temporary password (share it privately; they'll set their own): <span class="secret">${esc(r.tempPassword)}</span>`; $("#tEmail").value=$("#tName").value=""; loadTeam(); }
+    linkOut(r,`Added ${r.user.email}`); $("#tEmail").value=$("#tName").value=""; loadTeam(); }
   catch(e){ toast(e.message); } };
 const R={status:loadStatus,approvals:loadApprovals,activity:loadActivity};
 document.querySelectorAll("[data-refresh]").forEach(b=>b.onclick=()=>R[b.dataset.refresh]());
@@ -298,7 +337,8 @@ function refreshAll(){ loadStatus(); loadApprovals(); loadActivity(); loadTeam()
 setInterval(()=>{ if(me&&!document.hidden&&!editing){ loadStatus(); } },60000);
 
 /* ---------- boot ---------- */
-api("me").then(r=>{ me=r.user; me.mustChange?show("pass"):start(); }).catch(()=>show("login"));
+if(location.pathname==="/set-password") openSetPage();
+else api("me").then(r=>{ me=r.user; me.mustChange?show("pass"):start(); }).catch(()=>show("login"));
 </script>
 </body>
 </html>

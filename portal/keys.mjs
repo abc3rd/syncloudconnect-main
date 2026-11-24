@@ -9,6 +9,7 @@ export const KEY_CATALOG = [
   { name: "GHL_PIT_SCR", group: "GoHighLevel", label: "Sweet Cypress Ranch token", help: "In the SCR sub-account: Settings → Private Integrations → Create. Starts with pit-", for: "bridge", kind: "ghl", location: "Yi87VWPlnhonig1izMbI" },
   { name: "GHL_PIT_OMEGA_UI", group: "GoHighLevel", label: "Omega UI token", help: "In the Omega UI sub-account: Settings → Private Integrations → Create. Starts with pit-", for: "bridge", kind: "ghl", location: "ZWn4tZCNq2k2f8xaA8PQ" },
   { name: "ANTHROPIC_API_KEY", group: "AI models", label: "Claude API key (optional)", help: "console.anthropic.com → API keys. Starts with sk-ant-", for: "gateway", kind: "anthropic" },
+  { name: "RESEND_API_KEY", group: "Email", label: "Resend API key (sign-in emails)", help: "resend.com → API Keys. Starts with re_. Lets the portal email invite and password links.", for: "portal", kind: "resend" },
   { name: "GEMINI_API_KEY", group: "AI models", label: "Gemini key", help: "Already set. Replace only if you rotate it.", for: "gateway", kind: "gemini" },
 ];
 const BY_NAME = Object.fromEntries(KEY_CATALOG.map(k => [k.name, k]));
@@ -47,6 +48,12 @@ export async function checkKey(name, value) {
     if (k.kind === "anthropic") {
       const r = await fetch("https://api.anthropic.com/v1/models", { headers: { "x-api-key": value, "anthropic-version": "2023-06-01" }, signal: ctrl });
       return r.ok ? { ok: true, note: "Claude key works" } : { ok: false, note: `Anthropic said ${r.status}.` };
+    }
+    if (k.kind === "resend") {
+      if (!/^re_[A-Za-z0-9_]{10,}$/.test(value)) return { ok: false, note: "Resend keys start with re_" };
+      const r = await fetch(`${process.env.RESEND_API_BASE || "https://api.resend.com"}/domains`, { headers: { Authorization: `Bearer ${value}` }, signal: ctrl });
+      if (r.status === 401 || r.status === 403) { const t = await r.text(); if (!/restricted/i.test(t)) return { ok: false, note: "Resend rejected this key." }; }
+      return { ok: true, note: "Resend key works" };
     }
     return { ok: true, note: "Saved" };
   } catch (e) { return { ok: true, note: "Saved (couldn't verify right now)", unverified: true }; }
