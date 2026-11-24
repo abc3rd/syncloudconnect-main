@@ -122,23 +122,28 @@ async function askClaude(persona, messages) {
   if (!r.ok) throw new Error("Claude: " + (j.error?.message || r.status));
   return (j.content || []).map(c => c.text || "").join("").trim();
 }
+// Gemini: AI Studio keys (AIza…) use generativelanguage; Vertex AI express keys (AQ.…) use aiplatform. Same request shape.
 async function askGemini(persona, messages) {
   const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("no Gemini key");
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST", headers: { "x-goog-api-key": key, "content-type": "application/json" },
+  const vertex = process.env.GEMINI_VERTEX === "1" || key.startsWith("AQ.");
+  const model = process.env[`${persona.env}_GEMINI_MODEL`] || process.env.GEMINI_MODEL || (vertex ? "gemini-3-flash-preview" : "gemini-2.5-flash");
+  const base = (process.env.GEMINI_API_BASE || (vertex ? "https://aiplatform.googleapis.com/v1/publishers/google" : "https://generativelanguage.googleapis.com/v1beta")).replace(/\/$/, "");
+  const r = await fetch(`${base}/models/${model}:generateContent${vertex ? "?key=" + encodeURIComponent(key) : ""}`, {
+    method: "POST", headers: { ...(vertex ? {} : { "x-goog-api-key": key }), "content-type": "application/json" },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: persona.system }] },
       contents: messages.filter(m => m.role !== "system").map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })) }),
   });
-  const j = await r.json();
-  if (!r.ok) throw new Error("Gemini: " + (j.error?.message || r.status));
-  return (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim();
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error("Gemini: " + (j.error?.message || j[0]?.error?.message || r.status));
+  const t = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("").trim();
+  if (!t) throw new Error("Gemini returned no text");
+  return t;
 }
 async function think(persona, history) {
   const messages = [{ role: "system", content: persona.system }, ...history];
   const errors = [];
   for (const [name, fn] of [["Open WebUI", askOpenWebUI], ["Claude", askClaude], ["Gemini", askGemini]]) {
-    if (name === "Open WebUI" && !OWUI) continue;
+    if (name === "Open WebUI" && (!OWUI || (boot.ok && !owuiModels.length))) continue;
     try { return await fn(persona, messages); } catch (e) { errors.push(`${name}: ${e.message}`); }
   }
   throw new Error(errors.join(" | ") || "No AI connected yet");
